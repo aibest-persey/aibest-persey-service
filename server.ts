@@ -3,6 +3,10 @@ import express, { Express } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dns from "node:dns";
+import authRoutes from "./src/routes/auth-routes.js";
+import eventRoutes from "./src/routes/event-routes.js";
+import sequelize from "./src/clients/postgres-client.js";
+import "./src/models/associations.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
@@ -14,15 +18,13 @@ const PORT: number = parseInt(process.env.PORT || "3000", 10);
 
 server.use(express.json());
 
-import authRoutes from "./src/routes/auth-routes.js";
-
 server.use("/api/auth", authRoutes);
+server.use("/api/events", eventRoutes);
 
 server.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));
 });
 
-import sequelize from "./src/clients/postgres-client.js";
 sequelize
   .sync({ alter: true })
   .then(() => {
