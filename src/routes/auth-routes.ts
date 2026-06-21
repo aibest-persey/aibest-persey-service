@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Router } from "express";
 import rateLimit from "express-rate-limit";
 import {
   register,
@@ -8,9 +8,8 @@ import {
 } from "../controllers/auth-controller.js";
 import { verifyToken } from "../middleware/auth-middleware.js";
 
-const router = express.Router();
+const router: Router = express.Router();
 
-// Strict limiter for credential/token endpoints — 10 requests per 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
