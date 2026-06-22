@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Op } from "sequelize";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
@@ -10,6 +11,14 @@ interface CreateEventBody {
   date: string;
 }
 
+interface UpdateEventBody {
+  title?: string;
+  description?: string;
+  location?: string;
+  date?: string;
+}
+
+// POST /api/events — organiser only, creates a draft
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { title, description, location, date } = req.body as CreateEventBody;
@@ -30,6 +39,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
       description: description ?? null,
       location: location ?? null,
       date: parsedDate,
+      status: "draft",
       organiserId: req.user!.id,
     });
 
@@ -40,9 +50,20 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// GET /api/events — students see published only; organisers see all their own + all published
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
-    const events = await Event.findAll({ order: [["date", "ASC"]] });
+    const isOrganiser = req.user!.role === "organiser";
+
+    const where = isOrganiser
+      ? { [Op.or]: [{ organiserId: req.user!.id }, { status: "published" }] }
+      : { status: "published" };
+
+    const events = await Event.findAll({
+      where,
+      order: [["date", "ASC"]],
+    });
+
     res.json(events);
   } catch (error) {
     console.error("List Events Error:", error);
@@ -50,24 +71,169 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+// GET /api/events/:id — students see published only; includes registration stats
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
+    const isOrganiser = req.user!.role === "organiser";
+
     const event = await Event.findByPk(req.params.id);
+
     if (!event) {
       res.status(404).json({ message: "Event not found." });
       return;
     }
-    res.json(event);
+
+    // Students can only see published events
+    if (!isOrganiser && event.status !== "published") {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    const registrationCount = await Registration.count({
+      where: { eventId: event.id },
+    });
+
+    res.json({ ...event.toJSON(), registrationCount });
   } catch (error) {
     console.error("Get Event Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
 
+// PUT /api/events/:id — organiser only, update their own draft event
+export const updateEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only edit your own events." });
+      return;
+    }
+
+    if (event.status === "published") {
+      res.status(400).json({ message: "Published events cannot be edited. Unpublish first." });
+      return;
+    }
+
+    const { title, description, location, date } = req.body as UpdateEventBody;
+
+    if (date !== undefined) {
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        res.status(400).json({ message: "Invalid date format." });
+        return;
+      }
+      event.date = parsedDate;
+    }
+
+    if (title !== undefined) event.title = title;
+    if (description !== undefined) event.description = description ?? null;
+    if (location !== undefined) event.location = location ?? null;
+
+    await event.save();
+    res.json(event);
+  } catch (error) {
+    console.error("Update Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// PATCH /api/events/:id/publish — organiser only, publish a draft
+export const publishEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only publish your own events." });
+      return;
+    }
+
+    if (event.status === "published") {
+      res.status(400).json({ message: "Event is already published." });
+      return;
+    }
+
+    event.status = "published";
+    await event.save();
+
+    res.json(event);
+  } catch (error) {
+    console.error("Publish Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// PATCH /api/events/:id/unpublish — organiser only, revert to draft
+export const unpublishEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only unpublish your own events." });
+      return;
+    }
+
+    if (event.status === "draft") {
+      res.status(400).json({ message: "Event is already a draft." });
+      return;
+    }
+
+    event.status = "draft";
+    await event.save();
+
+    res.json(event);
+  } catch (error) {
+    console.error("Unpublish Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// DELETE /api/events/:id — organiser only, delete their own event
+export const deleteEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only delete your own events." });
+      return;
+    }
+
+    await Registration.destroy({ where: { eventId: event.id } });
+    await event.destroy();
+
+    res.json({ message: "Event deleted successfully." });
+  } catch (error) {
+    console.error("Delete Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// POST /api/events/:id/register — student only
 export const registerForEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const event = await Event.findByPk(req.params.id);
-    if (!event) {
+
+    if (!event || event.status !== "published") {
       res.status(404).json({ message: "Event not found." });
       return;
     }
@@ -92,11 +258,18 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// GET /api/events/:id/participants — organiser only
 export const getParticipants = async (req: Request, res: Response): Promise<void> => {
   try {
     const event = await Event.findByPk(req.params.id);
+
     if (!event) {
       res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only view participants for your own events." });
       return;
     }
 
@@ -111,7 +284,7 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
       ],
     });
 
-    res.json(registrations);
+    res.json({ event, registrationCount: registrations.length, participants: registrations });
   } catch (error) {
     console.error("Get Participants Error:", error);
     res.status(500).json({ message: "Internal server error." });

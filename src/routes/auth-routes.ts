@@ -12,15 +12,19 @@ const router: Router = express.Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "test" ? 1000 : 10,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
 });
 
-router.post("/register", authLimiter, register);
-router.post("/login", authLimiter, login);
-router.post("/reset-password", authLimiter, resetPassword);
+const limiter = process.env.NODE_ENV === "test"
+  ? (_req: any, _res: any, next: any) => next()
+  : authLimiter;
+
+router.post("/register", limiter, register);
+router.post("/login", limiter, login);
+router.post("/reset-password", limiter, resetPassword);
 router.get("/me", verifyToken, me);
 
 export default router;
