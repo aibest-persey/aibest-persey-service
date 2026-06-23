@@ -1,13 +1,13 @@
 import express from "express";
 import { EventDomain } from "../modules/eventDomain.js";
-import { verifyToken } from "../middleware/auth-middleware.js"; // <-- Plugs right into her middleware file!
+import { verifyToken } from "../middleware/auth-middleware.js";
 
 const router = express.Router();
 
-// Secured event booking endpoint
+// 1. Event registration endpoint
 router.post("/register", verifyToken, async (req, res) => {
   const { eventId } = req.body;
-  const userId = req.user.id; // <-- Safely extracts the certified user UUID from her JWT login session
+  const userId = req.user.id;
 
   if (!eventId) {
     return res.status(400).json({ success: false, error: "Please provide an eventId." });
@@ -16,6 +16,23 @@ router.post("/register", verifyToken, async (req, res) => {
   try {
     const data = await EventDomain.registerForEvent(userId, eventId);
     res.status(201).json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Event cancellation endpoint (Triggers the waitlist management queue)
+router.post("/cancel", verifyToken, async (req, res) => {
+  const { eventId } = req.body;
+  const userId = req.user.id;
+
+  if (!eventId) {
+    return res.status(400).json({ success: false, error: "Please provide an eventId." });
+  }
+
+  try {
+    const data = await EventDomain.cancelRegistration(userId, eventId);
+    res.status(200).json({ success: true, data });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
