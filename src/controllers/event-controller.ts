@@ -110,10 +110,13 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// GET /api/events/:id — students see published only; includes registration stats
+// GET /api/events/:id — full event detail
+// Students: published events only
+// Organisers: any event; owner gets recentRegistrations preview
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const userId = req.user!.id;
 
     const event = await Event.findByPk(req.params.id);
 
@@ -128,11 +131,49 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const isOwner = event.organiserId === userId;
+
+    // Fetch organiser's public profile to display "Organised by"
+    const organiser = await User.findByPk(event.organiserId, {
+      attributes: ["id", "username", "firstName", "lastName", "color"],
+    });
+
+    // Registration stats
     const registrationCount = await Registration.count({
       where: { eventId: event.id },
     });
 
-    res.json({ ...event.toJSON(), registrationCount });
+    // Check if the current user is registered
+    const existingRegistration = await Registration.findOne({
+      where: { eventId: event.id, studentId: userId },
+    });
+    const isRegistered = !!existingRegistration;
+
+    // Owners get a preview of the 5 most recent registrations for their detail page
+    let recentRegistrations = null;
+    if (isOwner) {
+      recentRegistrations = await Registration.findAll({
+        where: { eventId: event.id },
+        order: [["createdAt", "DESC"]],
+        limit: 5,
+        include: [
+          {
+            model: User,
+            as: "student",
+            attributes: ["id", "username", "firstName", "lastName", "color"],
+          },
+        ],
+      });
+    }
+
+    res.json({
+      ...event.toJSON(),
+      organiser,
+      registrationCount,
+      isRegistered,
+      isOwner,
+      ...(isOwner && { recentRegistrations }),
+    });
   } catch (error) {
     console.error("Get Event Error:", error);
     res.status(500).json({ message: "Internal server error." });

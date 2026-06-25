@@ -153,10 +153,15 @@ async function runTests() {
   const r14 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
   assert(r14.status === 404, `student get draft → 404 (got ${r14.status})`);
 
-  console.log("15. Organiser gets draft event → includes registrationCount");
+  console.log("15. Organiser gets draft event → full detail fields");
   const r15 = await request("GET", EVENTS_URL + "/" + eventId, null, organiserToken);
   assert(r15.status === 200, `organiser get draft → 200 (got ${r15.status})`);
   assert(r15.data.registrationCount !== undefined, "registrationCount present");
+  assert(r15.data.isOwner === true, "isOwner true for owner");
+  assert(r15.data.isRegistered !== undefined, "isRegistered present");
+  assert(r15.data.organiser && r15.data.organiser.username, "organiser profile present");
+  assert(Array.isArray(r15.data.recentRegistrations), "recentRegistrations array for owner");
+  assert(!r15.data.organiser.password, "organiser password not exposed");
 
   console.log("16. Update draft event");
   const r16 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Tech Conference 2026", location: "Plovdiv" }, organiserToken);
@@ -193,10 +198,14 @@ async function runTests() {
   assert(pubEvent.isRegistered === false, "isRegistered false before registering");
   assert(pubEvent.isOwner === false, "isOwner false for student");
 
-  console.log("23. Student gets published event → includes registrationCount");
+  console.log("23. Student gets published event → full detail fields");
   const r23 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
   assert(r23.status === 200, `get published → 200 (got ${r23.status})`);
   assert(r23.data.registrationCount === 0, `registrationCount is 0 (got ${r23.data.registrationCount})`);
+  assert(r23.data.isRegistered === false, "isRegistered false before registering");
+  assert(r23.data.isOwner === false, "isOwner false for student");
+  assert(r23.data.organiser && r23.data.organiser.username, "organiser info present");
+  assert(r23.data.recentRegistrations === undefined, "recentRegistrations not exposed to non-owner");
 
   console.log("24. Student registers for event");
   const r24 = await request("POST", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
@@ -206,9 +215,12 @@ async function runTests() {
   const r25 = await request("POST", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
   assert(r25.status === 409, `double register → 409 (got ${r25.status})`);
 
-  console.log("26. registrationCount is now 1 and isRegistered is true");
+  console.log("26. After registration: isRegistered true, recentRegistrations updated for owner");
   const r26a = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
   assert(r26a.data.registrationCount === 1, `getEvent registrationCount is 1 (got ${r26a.data.registrationCount})`);
+  assert(r26a.data.isRegistered === true, "isRegistered true after registering");
+  const r26c = await request("GET", EVENTS_URL + "/" + eventId, null, organiserToken);
+  assert(r26c.data.recentRegistrations.length === 1, "owner sees 1 recentRegistration");
   const r26b = await request("GET", EVENTS_URL, null, studentToken);
   const afterReg = r26b.data.find(e => e.id === eventId);
   assert(afterReg.registrationCount === 1, `list registrationCount is 1 (got ${afterReg.registrationCount})`);
