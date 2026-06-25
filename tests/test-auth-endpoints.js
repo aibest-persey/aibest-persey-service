@@ -140,10 +140,14 @@ async function runTests() {
   assert(Array.isArray(r12.data), "response is array");
   assert(!r12.data.find(e => e.id === eventId), "draft hidden from student");
 
-  console.log("13. List events as organiser → draft visible");
+  console.log("13. List events as organiser → draft visible with extra fields");
   const r13 = await request("GET", EVENTS_URL, null, organiserToken);
   assert(r13.status === 200, `list → 200 (got ${r13.status})`);
-  assert(r13.data.find(e => e.id === eventId), "organiser sees own draft");
+  const ownEvent = r13.data.find(e => e.id === eventId);
+  assert(ownEvent, "organiser sees own draft");
+  assert(ownEvent.registrationCount !== undefined, "registrationCount present in list");
+  assert(ownEvent.isOwner === true, "isOwner true for own event");
+  assert(ownEvent.isRegistered !== undefined, "isRegistered field present");
 
   console.log("14. Student tries to get draft event → 404");
   const r14 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
@@ -181,9 +185,13 @@ async function runTests() {
   const r21 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Changed" }, organiserToken);
   assert(r21.status === 400, `edit published → 400 (got ${r21.status})`);
 
-  console.log("22. Student sees published event in list");
+  console.log("22. Student sees published event in list with correct fields");
   const r22 = await request("GET", EVENTS_URL, null, studentToken);
-  assert(r22.data.find(e => e.id === eventId), "student sees published event");
+  const pubEvent = r22.data.find(e => e.id === eventId);
+  assert(pubEvent, "student sees published event");
+  assert(pubEvent.registrationCount !== undefined, "registrationCount in student list");
+  assert(pubEvent.isRegistered === false, "isRegistered false before registering");
+  assert(pubEvent.isOwner === false, "isOwner false for student");
 
   console.log("23. Student gets published event → includes registrationCount");
   const r23 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
@@ -198,9 +206,13 @@ async function runTests() {
   const r25 = await request("POST", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
   assert(r25.status === 409, `double register → 409 (got ${r25.status})`);
 
-  console.log("26. registrationCount is now 1");
-  const r26 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
-  assert(r26.data.registrationCount === 1, `registrationCount is 1 (got ${r26.data.registrationCount})`);
+  console.log("26. registrationCount is now 1 and isRegistered is true");
+  const r26a = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
+  assert(r26a.data.registrationCount === 1, `getEvent registrationCount is 1 (got ${r26a.data.registrationCount})`);
+  const r26b = await request("GET", EVENTS_URL, null, studentToken);
+  const afterReg = r26b.data.find(e => e.id === eventId);
+  assert(afterReg.registrationCount === 1, `list registrationCount is 1 (got ${afterReg.registrationCount})`);
+  assert(afterReg.isRegistered === true, "isRegistered true after registering");
 
   console.log("27. Organiser gets participants");
   const r27 = await request("GET", EVENTS_URL + "/" + eventId + "/participants", null, organiserToken);
@@ -221,19 +233,31 @@ async function runTests() {
   const r30 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Final Title" }, organiserToken);
   assert(r30.status === 200, `update after unpublish → 200 (got ${r30.status})`);
 
-  console.log("31. Delete event");
-  const r31 = await request("DELETE", EVENTS_URL + "/" + eventId, null, organiserToken);
-  assert(r31.status === 200, `delete → 200 (got ${r31.status})`);
+  console.log("31. ?status=draft filter — organiser sees only drafts");
+  const r31a = await request("GET", EVENTS_URL + "?status=draft", null, organiserToken);
+  assert(r31a.status === 200, `status=draft → 200 (got ${r31a.status})`);
+  assert(r31a.data.every(e => e.status === "draft"), "all results are drafts");
+  assert(r31a.data.find(e => e.id === eventId), "current event (draft) is in results");
 
-  console.log("32. Deleted event no longer found");
-  const r32 = await request("GET", EVENTS_URL + "/" + eventId, null, organiserToken);
-  assert(r32.status === 404, `after delete → 404 (got ${r32.status})`);
+  console.log("32. ?upcoming=true filter — excludes past events");
+  const r31b = await request("GET", EVENTS_URL + "?upcoming=true", null, studentToken);
+  assert(r31b.status === 200, `upcoming=true → 200 (got ${r31b.status})`);
+  const now = new Date();
+  assert(r31b.data.every(e => new Date(e.date) >= now), "all results are upcoming");
 
-  console.log("33. Unauthenticated list → 401");
-  const r33 = await request("GET", EVENTS_URL, null, null);
-  assert(r33.status === 401, `unauth list → 401 (got ${r33.status})`);
+  console.log("34. Delete event");
+  const r34 = await request("DELETE", EVENTS_URL + "/" + eventId, null, organiserToken);
+  assert(r34.status === 200, `delete → 200 (got ${r34.status})`);
 
-  console.log("\nAll 33 tests passed!\n");
+  console.log("35. Deleted event no longer found");
+  const r35 = await request("GET", EVENTS_URL + "/" + eventId, null, organiserToken);
+  assert(r35.status === 404, `after delete → 404 (got ${r35.status})`);
+
+  console.log("36. Unauthenticated list → 401");
+  const r36 = await request("GET", EVENTS_URL, null, null);
+  assert(r36.status === 401, `unauth list → 401 (got ${r36.status})`);
+
+  console.log("\nAll 36 tests passed!\n");
 }
 
 runTests().catch(err => {

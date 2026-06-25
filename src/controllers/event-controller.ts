@@ -50,21 +50,60 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// GET /api/events — students see published only; organisers see all their own + all published
+// GET /api/events — students see published only; organisers see their own (all) + others' published
+// Query params:
+//   ?upcoming=true   — only events with date >= now
+//   ?status=draft    — organisers only: filter to their own drafts
+//   ?status=published — filter to published events
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const userId = req.user!.id;
+    const { upcoming, status } = req.query as { upcoming?: string; status?: string };
 
-    const where = isOrganiser
-      ? { [Op.or]: [{ organiserId: req.user!.id }, { status: "published" }] }
+    // Base visibility filter
+    let where: any = isOrganiser
+      ? { [Op.or]: [{ organiserId: userId }, { status: "published" }] }
       : { status: "published" };
 
-    const events = await Event.findAll({
-      where,
-      order: [["date", "ASC"]],
-    });
+    // Organisers can additionally filter by status
+    if (isOrganiser && status === "draft") {
+      where = { organiserId: userId, status: "draft" };
+    } else if (status === "published") {
+      where = isOrganiser
+        ? { [Op.or]: [{ organiserId: userId, status: "published" }, { status: "published" }] }
+        : { status: "published" };
+    }
 
-    res.json(events);
+    // Filter to upcoming events only
+    if (upcoming === "true") {
+      where = { ...where, date: { [Op.gte]: new Date() } };
+    }
+
+    const events = await Event.findAll({ where, order: [["date", "ASC"]] });
+
+    // Fetch all registrations for these events in one query
+    const eventIds = events.map(e => e.id);
+    const registrations = eventIds.length
+      ? await Registration.findAll({ where: { eventId: eventIds } })
+      : [];
+
+    // Build registration count map and student's own registration set
+    const countMap: Record<string, number> = {};
+    const registeredSet = new Set<string>();
+    for (const r of registrations) {
+      countMap[r.eventId] = (countMap[r.eventId] ?? 0) + 1;
+      if (r.studentId === userId) registeredSet.add(r.eventId);
+    }
+
+    const result = events.map(e => ({
+      ...e.toJSON(),
+      registrationCount: countMap[e.id] ?? 0,
+      isRegistered: registeredSet.has(e.id),   // true if current user is registered
+      isOwner: e.organiserId === userId,         // true if current user created this event
+    }));
+
+    res.json(result);
   } catch (error) {
     console.error("List Events Error:", error);
     res.status(500).json({ message: "Internal server error." });
