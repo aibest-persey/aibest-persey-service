@@ -3,8 +3,7 @@ import redis from "../clients/redis-client.js";
 
 export const EventDomain = {
   /**
-   * Business Rule: Register a student for a school event.
-   * Leverages Upstash Redis configurations for safe capacity checks.
+   * BACKLOG TICKET #9: Event Registration Endpoint Flow
    */
   async registerForEvent(userId, eventId) {
     const event = await Event.findByPk(Number(eventId));
@@ -48,12 +47,9 @@ export const EventDomain = {
   },
 
   /**
-   * BACKLOG TICKET #4: Waitlist Management Logic
-   * Business Rule: When a user cancels their spot, find the oldest person 
-   * on the waitlist, upgrade them to 'registered', and update the Redis counters.
+   * BACKLOG TICKET #10 & #13: Registration Cancellation, Promotion, and Consistency Business Rules
    */
   async cancelRegistration(userId, eventId) {
-    // 1. Find the target registration
     const targetReg = await Registration.findOne({
       where: { userId: userId, eventId: Number(eventId) }
     });
@@ -61,37 +57,64 @@ export const EventDomain = {
     
     const originalStatus = targetReg.status;
 
-    // 2. Mark current slot as cancelled
     targetReg.status = "cancelled";
     await targetReg.save();
 
     const redisKey = `event:${eventId}:reg_count`;
 
-    // 3. If a active 'registered' user just dropped out, manage the waitlist queue
     if (originalStatus === "registered") {
-      // Find the next person in line (First In, First Out based on createdAt timestamp)
+      // First In, First Out logic to find the next student in line
       const nextInLine = await Registration.findOne({
         where: { eventId: Number(eventId), status: "waitlisted" },
         order: [["createdAt", "ASC"]]
       });
 
       if (nextInLine) {
-        // Upgrade waitlisted student to active attendee
         nextInLine.status = "registered";
         await nextInLine.save();
 
-        // Create alert notification record
         const event = await Event.findByPk(Number(eventId));
         await Notification.create({
           userId: nextInLine.userId,
           message: `Good news! A spot opened up for "${event.title}" and your registration is confirmed.`
         });
       } else {
-        // No waitlist queue exists? Simply decrement the live Redis seat tracker down by 1
         await redis.decr(redisKey);
       }
     }
 
     return { message: "Registration cancelled and queue updated successfully" };
+  },
+
+  /**
+   * BACKLOG TICKET #12: Waitlist Ordering and Visibility
+   * Calculates the exact line position of a student on a waitlist.
+   */
+  async getWaitlistPosition(userId, eventId) {
+    // 1. Verify the student is actually waitlisted
+    const userReg = await Registration.findOne({
+      where: { userId: userId, eventId: Number(eventId), status: "waitlisted" }
+    });
+
+    if (!userReg) {
+      return { isWaitlisted: false, position: 0 };
+    }
+
+    // 2. Count how many people joined the waitlist BEFORE this student
+    const positionCount = await Registration.count({
+      where: {
+        eventId: Number(eventId),
+        status: "waitlisted",
+        createdAt: {
+          [Symbol.for("lt")]: userReg.createdAt // Pull entries older than current record
+        }
+      }
+    });
+
+    // Position is the count of people ahead of them + 1
+    return {
+      isWaitlisted: true,
+      position: positionCount + 1
+    };
   }
 };
