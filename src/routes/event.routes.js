@@ -4,7 +4,6 @@ import { verifyToken } from "../middleware/auth-middleware.js";
 
 const router = express.Router();
 
-// 1. Event registration flow endpoint (#9)
 router.post("/register", verifyToken, async (req, res) => {
   const { eventId } = req.body;
   const userId = req.user.id;
@@ -21,7 +20,6 @@ router.post("/register", verifyToken, async (req, res) => {
   }
 });
 
-// 2. Event cancellation queue endpoint (#10)
 router.post("/cancel", verifyToken, async (req, res) => {
   const { eventId } = req.body;
   const userId = req.user.id;
@@ -38,7 +36,6 @@ router.post("/cancel", verifyToken, async (req, res) => {
   }
 });
 
-// 3. Waitlist line visibility position checker endpoint (#12)
 router.get("/position/:eventId", verifyToken, async (req, res) => {
   const { eventId } = req.params;
   const userId = req.user.id;
