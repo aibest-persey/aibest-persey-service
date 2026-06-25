@@ -257,6 +257,30 @@ async function runTests() {
   const now = new Date();
   assert(r31b.data.every(e => new Date(e.date) >= now), "all results are upcoming");
 
+  console.log("33. Cancel event (from draft)");
+  const r33a = await request("PATCH", EVENTS_URL + "/" + eventId + "/cancel", null, organiserToken);
+  assert(r33a.status === 200, `cancel → 200 (got ${r33a.status})`);
+  assert(r33a.data.status === "cancelled", `status is cancelled (got ${r33a.data.status})`);
+
+  console.log("33b. Cancel already-cancelled event → 400");
+  const r33b = await request("PATCH", EVENTS_URL + "/" + eventId + "/cancel", null, organiserToken);
+  assert(r33b.status === 400, `double cancel → 400 (got ${r33b.status})`);
+
+  console.log("33c. Student tries to register for cancelled event → 410");
+  const r33c = await request("POST", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
+  assert(r33c.status === 410, `register for cancelled → 410 (got ${r33c.status})`);
+
+  console.log("33d. Student can still see cancelled event in list");
+  const r33d = await request("GET", EVENTS_URL, null, studentToken);
+  assert(Array.isArray(r33d.data), "list is array");
+  const cancelledEvent = r33d.data.find(e => e.id === eventId);
+  assert(cancelledEvent, "cancelled event visible to student");
+  assert(cancelledEvent.status === "cancelled", `event shows cancelled status (got ${cancelledEvent.status})`);
+
+  console.log("33e. Student tries to cancel event → 403");
+  const r33e = await request("PATCH", EVENTS_URL + "/" + eventId + "/cancel", null, studentToken);
+  assert(r33e.status === 403, `student cancel → 403 (got ${r33e.status})`);
+
   console.log("34. Delete event");
   const r34 = await request("DELETE", EVENTS_URL + "/" + eventId, null, organiserToken);
   assert(r34.status === 200, `delete → 200 (got ${r34.status})`);
@@ -269,7 +293,7 @@ async function runTests() {
   const r36 = await request("GET", EVENTS_URL, null, null);
   assert(r36.status === 401, `unauth list → 401 (got ${r36.status})`);
 
-  console.log("\nAll 36 tests passed!\n");
+  console.log("\nAll tests passed!\n");
 }
 
 runTests().catch(err => {

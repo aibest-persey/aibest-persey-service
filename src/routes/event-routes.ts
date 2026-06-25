@@ -6,6 +6,7 @@ import {
   updateEvent,
   publishEvent,
   unpublishEvent,
+  cancelEvent,
   deleteEvent,
   registerForEvent,
   getParticipants,
@@ -20,6 +21,7 @@ router.post("/", verifyToken, requireOrganiser, createEvent);
 router.put("/:id", verifyToken, requireOrganiser, updateEvent);
 router.patch("/:id/publish", verifyToken, requireOrganiser, publishEvent);
 router.patch("/:id/unpublish", verifyToken, requireOrganiser, unpublishEvent);
+router.patch("/:id/cancel", verifyToken, requireOrganiser, cancelEvent);
 router.delete("/:id", verifyToken, requireOrganiser, deleteEvent);
 router.post("/:id/register", verifyToken, requireStudent, registerForEvent);
 router.get("/:id/participants", verifyToken, requireOrganiser, getParticipants);

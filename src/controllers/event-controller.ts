@@ -50,25 +50,28 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// GET /api/events — students see published only; organisers see their own (all) + others' published
+// GET /api/events — students see published + cancelled; organisers see their own (all) + others' published/cancelled
 // Query params:
-//   ?upcoming=true   — only events with date >= now
-//   ?status=draft    — organisers only: filter to their own drafts
-//   ?status=published — filter to published events
+//   ?upcoming=true          — only events with date >= now
+//   ?status=draft           — organisers only: filter to their own drafts
+//   ?status=published       — filter to published events
+//   ?status=cancelled       — filter to cancelled events
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
     const userId = req.user!.id;
     const { upcoming, status } = req.query as { upcoming?: string; status?: string };
 
-    // Base visibility filter
+    // Base visibility: students see published + cancelled; organisers see own events + others' published/cancelled
     let where: any = isOrganiser
-      ? { [Op.or]: [{ organiserId: userId }, { status: "published" }] }
-      : { status: "published" };
+      ? { [Op.or]: [{ organiserId: userId }, { status: ["published", "cancelled"] }] }
+      : { status: ["published", "cancelled"] };
 
     // Organisers can additionally filter by status
     if (isOrganiser && status === "draft") {
       where = { organiserId: userId, status: "draft" };
+    } else if (isOrganiser && status === "cancelled") {
+      where = { organiserId: userId, status: "cancelled" };
     } else if (status === "published") {
       where = isOrganiser
         ? { [Op.or]: [{ organiserId: userId, status: "published" }, { status: "published" }] }
@@ -283,6 +286,36 @@ export const unpublishEvent = async (req: Request, res: Response): Promise<void>
   }
 };
 
+// PATCH /api/events/:id/cancel — organiser only, cancel a published or draft event
+export const cancelEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only cancel your own events." });
+      return;
+    }
+
+    if (event.status === "cancelled") {
+      res.status(400).json({ message: "Event is already cancelled." });
+      return;
+    }
+
+    event.status = "cancelled";
+    await event.save();
+
+    res.json(event);
+  } catch (error) {
+    console.error("Cancel Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 // DELETE /api/events/:id — organiser only, delete their own event
 export const deleteEvent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -313,8 +346,13 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
   try {
     const event = await Event.findByPk(req.params.id);
 
-    if (!event || event.status !== "published") {
+    if (!event || event.status === "draft") {
       res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.status === "cancelled") {
+      res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." });
       return;
     }
 

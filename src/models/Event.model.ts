@@ -7,7 +7,7 @@ interface EventAttributes {
   description: string | null;
   location: string | null;
   date: Date;
-  status: "draft" | "published";
+  status: "draft" | "published" | "cancelled";
   organiserId: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -51,7 +51,7 @@ Event.init(
       allowNull: false,
     },
     status: {
-      type: DataTypes.ENUM("draft", "published"),
+      type: DataTypes.ENUM("draft", "published", "cancelled"),
       allowNull: false,
       defaultValue: "draft",
     },
