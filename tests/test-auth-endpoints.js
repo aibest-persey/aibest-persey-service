@@ -22,10 +22,19 @@ const studentUser = {
   password: "StudentPass123!",
 };
 
+const studentUser2 = {
+  firstName: "Student2", lastName: "User",
+  username: "student2_" + ts,
+  email: "student2_" + ts + "@example.com",
+  password: "StudentPass123!",
+};
+
 let organiserToken = "";
 let studentToken  = "";
+let student2Token = "";
 let organiserId   = "";
 let eventId       = "";
+let capacityEventId = "";
 
 async function request(method, url, body, authToken) {
   const options = { method, headers: { "Content-Type": "application/json" } };
@@ -77,6 +86,10 @@ async function runTests() {
   const r1 = await request("POST", AUTH_URL + "/register", studentUser);
   assert(r1.status === 201, `register student → 201 (got ${r1.status})`);
 
+  console.log("1b. Register student2");
+  const r1b = await request("POST", AUTH_URL + "/register", studentUser2);
+  assert(r1b.status === 201, `register student2 → 201 (got ${r1b.status})`);
+
   console.log("2. Register organiser");
   const r2 = await request("POST", AUTH_URL + "/register", organiserUser);
   assert(r2.status === 201, `register organiser → 201 (got ${r2.status})`);
@@ -89,6 +102,11 @@ async function runTests() {
   const r4 = await request("POST", AUTH_URL + "/login", { identifier: studentUser.username, password: studentUser.password });
   assert(r4.status === 200, `login student → 200 (got ${r4.status})`);
   studentToken = r4.data.token;
+
+  console.log("4b. Login student2");
+  const r4b = await request("POST", AUTH_URL + "/login", { identifier: studentUser2.username, password: studentUser2.password });
+  assert(r4b.status === 200, `login student2 → 200 (got ${r4b.status})`);
+  student2Token = r4b.data.token;
 
   console.log("5. Login organiser (still role=student before promotion)");
   const r5 = await request("POST", AUTH_URL + "/login", { identifier: organiserUser.email, password: organiserUser.password });
@@ -235,6 +253,64 @@ async function runTests() {
   console.log("28. Student tries to get participants → 403");
   const r28 = await request("GET", EVENTS_URL + "/" + eventId + "/participants", null, studentToken);
   assert(r28.status === 403, `student participants → 403 (got ${r28.status})`);
+
+  console.log("W1. Student cancels their registration");
+  const rw1 = await request("DELETE", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
+  assert(rw1.status === 200, `cancel registration → 200 (got ${rw1.status})`);
+
+  console.log("W2. After cancellation: isRegistered false, count drops to 0");
+  const rw2 = await request("GET", EVENTS_URL + "/" + eventId, null, studentToken);
+  assert(rw2.data.isRegistered === false, "isRegistered false after cancel");
+  assert(rw2.data.registrationCount === 0, `registrationCount 0 after cancel (got ${rw2.data.registrationCount})`);
+
+  console.log("W3. Cancel again → 404 (no active registration)");
+  const rw3 = await request("DELETE", EVENTS_URL + "/" + eventId + "/register", null, studentToken);
+  assert(rw3.status === 404, `double cancel → 404 (got ${rw3.status})`);
+
+  console.log("W4. Create capacity-limited event (maxCapacity=1)");
+  const rw4 = await request("POST", EVENTS_URL, { title: "Capacity Event", date: "2026-10-01T10:00:00Z", maxCapacity: 1 }, organiserToken);
+  assert(rw4.status === 201, `create capacity event → 201 (got ${rw4.status})`);
+  assert(rw4.data.maxCapacity === 1, `maxCapacity is 1 (got ${rw4.data.maxCapacity})`);
+  capacityEventId = rw4.data.id;
+
+  console.log("W5. Publish capacity event");
+  const rw5 = await request("PATCH", EVENTS_URL + "/" + capacityEventId + "/publish", null, organiserToken);
+  assert(rw5.status === 200, `publish → 200 (got ${rw5.status})`);
+
+  console.log("W6. Student1 registers → status=registered");
+  const rw6 = await request("POST", EVENTS_URL + "/" + capacityEventId + "/register", null, studentToken);
+  assert(rw6.status === 201, `student1 register → 201 (got ${rw6.status})`);
+  assert(rw6.data.status === "registered", `status is registered (got ${rw6.data.status})`);
+
+  console.log("W7. Student2 registers → capacity full → status=waitlisted");
+  const rw7 = await request("POST", EVENTS_URL + "/" + capacityEventId + "/register", null, student2Token);
+  assert(rw7.status === 201, `student2 register → 201 (got ${rw7.status})`);
+  assert(rw7.data.status === "waitlisted", `status is waitlisted (got ${rw7.data.status})`);
+  assert(rw7.data.waitlistPosition === 1, `waitlistPosition is 1 (got ${rw7.data.waitlistPosition})`);
+
+  console.log("W8. List shows registrationCount=1, student2 isWaitlisted=true");
+  const rw8 = await request("GET", EVENTS_URL + "/" + capacityEventId, null, student2Token);
+  assert(rw8.data.registrationCount === 1, `registrationCount is 1 (got ${rw8.data.registrationCount})`);
+  assert(rw8.data.isWaitlisted === true, "student2 isWaitlisted true");
+  assert(rw8.data.isRegistered === false, "student2 isRegistered false while waitlisted");
+
+  console.log("W9. Student1 cancels → student2 auto-promoted to registered");
+  const rw9 = await request("DELETE", EVENTS_URL + "/" + capacityEventId + "/register", null, studentToken);
+  assert(rw9.status === 200, `student1 cancel → 200 (got ${rw9.status})`);
+
+  console.log("W10. After promotion: student2 isRegistered=true, count stays at 1");
+  const rw10 = await request("GET", EVENTS_URL + "/" + capacityEventId, null, student2Token);
+  assert(rw10.data.isRegistered === true, "student2 promoted to registered");
+  assert(rw10.data.isWaitlisted === false, "student2 no longer waitlisted");
+  assert(rw10.data.registrationCount === 1, `registrationCount still 1 after promotion (got ${rw10.data.registrationCount})`);
+
+  console.log("W11. Organiser sees waitlistCount=0 after promotion");
+  const rw11 = await request("GET", EVENTS_URL + "/" + capacityEventId + "/participants", null, organiserToken);
+  assert(rw11.data.registrationCount === 1, `registrationCount 1 (got ${rw11.data.registrationCount})`);
+  assert(rw11.data.waitlistCount === 0, `waitlistCount 0 after promotion (got ${rw11.data.waitlistCount})`);
+
+  console.log("W12. Cleanup: delete capacity event");
+  await request("DELETE", EVENTS_URL + "/" + capacityEventId, null, organiserToken);
 
   console.log("29. Unpublish event");
   const r29 = await request("PATCH", EVENTS_URL + "/" + eventId + "/unpublish", null, organiserToken);

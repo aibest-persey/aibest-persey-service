@@ -8,12 +8,13 @@ interface EventAttributes {
   location: string | null;
   date: Date;
   status: "draft" | "published" | "cancelled";
+  maxCapacity: number | null;
   organiserId: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "location" | "status"> {}
+interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "location" | "status" | "maxCapacity"> {}
 
 class Event extends Model<EventAttributes, EventCreationAttributes> implements EventAttributes {
   declare id: string;
@@ -21,7 +22,8 @@ class Event extends Model<EventAttributes, EventCreationAttributes> implements E
   declare description: string | null;
   declare location: string | null;
   declare date: Date;
-  declare status: "draft" | "published";
+  declare status: "draft" | "published" | "cancelled";
+  declare maxCapacity: number | null;
   declare organiserId: string;
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
@@ -54,6 +56,11 @@ Event.init(
       type: DataTypes.ENUM("draft", "published", "cancelled"),
       allowNull: false,
       defaultValue: "draft",
+    },
+    maxCapacity: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
     },
     organiserId: {
       type: DataTypes.UUID,

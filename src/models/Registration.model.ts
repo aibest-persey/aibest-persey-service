@@ -5,16 +5,20 @@ interface RegistrationAttributes {
   id: string;
   eventId: string;
   studentId: string;
+  status: "registered" | "waitlisted" | "cancelled";
+  waitlistPosition: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface RegistrationCreationAttributes extends Optional<RegistrationAttributes, "id"> {}
+interface RegistrationCreationAttributes extends Optional<RegistrationAttributes, "id" | "status" | "waitlistPosition"> {}
 
 class Registration extends Model<RegistrationAttributes, RegistrationCreationAttributes> implements RegistrationAttributes {
   declare id: string;
   declare eventId: string;
   declare studentId: string;
+  declare status: "registered" | "waitlisted" | "cancelled";
+  declare waitlistPosition: number | null;
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
 }
@@ -34,12 +38,21 @@ Registration.init(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    status: {
+      type: DataTypes.ENUM("registered", "waitlisted", "cancelled"),
+      allowNull: false,
+      defaultValue: "registered",
+    },
+    waitlistPosition: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "registrations",
     timestamps: true,
     sequelize,
-    indexes: [{ unique: true, fields: ["eventId", "studentId"] }],
   },
 );
 
