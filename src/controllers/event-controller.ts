@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
+import sequelize from "../clients/postgres-client.js";
 
 interface CreateEventBody {
   title: string;
@@ -353,57 +354,67 @@ export const deleteEvent = async (req: Request, res: Response): Promise<void> =>
 
 // POST /api/events/:id/register — student only
 export const registerForEvent = async (req: Request, res: Response): Promise<void> => {
+  // Pre-flight checks outside the transaction (no locks needed, fast-fail)
+  const eventId = req.params.id;
+  const studentId = req.user!.id;
+
+  const eventCheck = await Event.findByPk(eventId);
+  if (!eventCheck || eventCheck.status === "draft") {
+    res.status(404).json({ message: "Event not found." });
+    return;
+  }
+  if (eventCheck.status === "cancelled") {
+    res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." });
+    return;
+  }
+
   try {
-    const event = await Event.findByPk(req.params.id);
-
-    if (!event || event.status === "draft") {
-      res.status(404).json({ message: "Event not found." });
-      return;
-    }
-
-    if (event.status === "cancelled") {
-      res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." });
-      return;
-    }
-
-    // Block duplicate active registrations (registered or waitlisted)
-    const existing = await Registration.findOne({
-      where: { eventId: req.params.id, studentId: req.user!.id, status: ["registered", "waitlisted"] },
-    });
-    if (existing) {
-      res.status(409).json({ message: "Already registered for this event." });
-      return;
-    }
-
-    // Determine if event is at capacity
-    let status: "registered" | "waitlisted" = "registered";
-    let waitlistPosition: number | null = null;
-
-    if (event.maxCapacity !== null) {
-      const confirmedCount = await Registration.count({
-        where: { eventId: req.params.id, status: "registered" },
+    const registration = await sequelize.transaction(async (t) => {
+      // Lock the event row — concurrent registrations for the same event queue here
+      const event = await Event.findByPk(eventId, {
+        lock: t.LOCK.UPDATE,
+        transaction: t,
       });
 
-      if (confirmedCount >= event.maxCapacity) {
-        // Add to waitlist — position is one after the current last waitlisted
-        const lastWaitlisted = await Registration.findOne({
-          where: { eventId: req.params.id, status: "waitlisted" },
-          order: [["waitlistPosition", "DESC"]],
-        });
-        status = "waitlisted";
-        waitlistPosition = (lastWaitlisted?.waitlistPosition ?? 0) + 1;
-      }
-    }
+      if (!event || event.status === "draft") throw Object.assign(new Error("not_found"), { code: 404 });
+      if (event.status === "cancelled") throw Object.assign(new Error("cancelled"), { code: 410 });
 
-    const registration = await Registration.create({
-      eventId: req.params.id,
-      studentId: req.user!.id,
-      status,
-      waitlistPosition,
+      // Check for existing active registration inside the lock
+      const existing = await Registration.findOne({
+        where: { eventId, studentId, status: ["registered", "waitlisted"] },
+        transaction: t,
+      });
+      if (existing) throw Object.assign(new Error("conflict"), { code: 409 });
+
+      // Determine status — count confirmed seats inside the lock to prevent over-booking
+      let status: "registered" | "waitlisted" = "registered";
+      let waitlistPosition: number | null = null;
+
+      if (event.maxCapacity !== null) {
+        const confirmedCount = await Registration.count({
+          where: { eventId, status: "registered" },
+          transaction: t,
+        });
+
+        if (confirmedCount >= event.maxCapacity) {
+          const lastWaitlisted = await Registration.findOne({
+            where: { eventId, status: "waitlisted" },
+            order: [["waitlistPosition", "DESC"]],
+            transaction: t,
+          });
+          status = "waitlisted";
+          waitlistPosition = (lastWaitlisted?.waitlistPosition ?? 0) + 1;
+        }
+      }
+
+      return Registration.create({ eventId, studentId, status, waitlistPosition }, { transaction: t });
     });
 
     res.status(201).json(registration);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 404) { res.status(404).json({ message: "Event not found." }); return; }
+    if (error.code === 410) { res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." }); return; }
+    if (error.code === 409) { res.status(409).json({ message: "Already registered for this event." }); return; }
     console.error("Register For Event Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
