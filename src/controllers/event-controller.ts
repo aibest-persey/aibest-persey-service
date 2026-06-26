@@ -4,6 +4,7 @@ import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
 import sequelize from "../clients/postgres-client.js";
+import eventBus from "../events/event-bus.js";
 
 interface CreateEventBody {
   title: string;
@@ -411,6 +412,32 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
     });
 
     res.status(201).json(registration);
+
+    // Publish domain event after transaction commits — non-blocking, fire-and-forget
+    const [student, event] = await Promise.all([
+      User.findByPk(studentId, { attributes: ["id", "email", "firstName", "lastName"] }),
+      Event.findByPk(eventId, { attributes: ["id", "title"] }),
+    ]);
+    if (student && event) {
+      const studentName = `${student.get("firstName")} ${student.get("lastName")}`;
+      const studentEmail = student.get("email") as string;
+      const eventTitle = event.get("title") as string;
+
+      if (registration.status === "registered") {
+        eventBus.publish("registration.confirmed", {
+          eventId, eventTitle, studentId,
+          studentEmail, studentName,
+          registrationId: registration.id,
+        });
+      } else {
+        eventBus.publish("registration.waitlisted", {
+          eventId, eventTitle, studentId,
+          studentEmail, studentName,
+          registrationId: registration.id,
+          waitlistPosition: registration.waitlistPosition!,
+        });
+      }
+    }
   } catch (error: any) {
     if (error.code === 404) { res.status(404).json({ message: "Event not found." }); return; }
     if (error.code === 410) { res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." }); return; }
@@ -437,23 +464,50 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
     registration.waitlistPosition = null;
     await registration.save();
 
+    res.json({ message: "Registration cancelled successfully." });
+
+    // Publish cancellation event and handle auto-promotion asynchronously
+    const [eventRecord, cancellingStudent] = await Promise.all([
+      Event.findByPk(req.params.id, { attributes: ["id", "title", "maxCapacity"] }),
+      User.findByPk(req.user!.id, { attributes: ["id", "email", "firstName", "lastName"] }),
+    ]);
+
+    if (eventRecord && cancellingStudent) {
+      eventBus.publish("registration.cancelled", {
+        eventId: req.params.id,
+        eventTitle: eventRecord.get("title") as string,
+        studentId: req.user!.id,
+        registrationId: registration.id,
+      });
+    }
+
     // Auto-promote next waitlisted student if a confirmed spot opened up
-    if (wasRegistered) {
-      const event = await Event.findByPk(req.params.id);
-      if (event?.maxCapacity !== null) {
-        const nextWaitlisted = await Registration.findOne({
-          where: { eventId: req.params.id, status: "waitlisted" },
-          order: [["waitlistPosition", "ASC"]],
+    if (wasRegistered && eventRecord?.maxCapacity !== null) {
+      const nextWaitlisted = await Registration.findOne({
+        where: { eventId: req.params.id, status: "waitlisted" },
+        order: [["waitlistPosition", "ASC"]],
+      });
+      if (nextWaitlisted) {
+        nextWaitlisted.status = "registered";
+        nextWaitlisted.waitlistPosition = null;
+        await nextWaitlisted.save();
+
+        // Notify the promoted student
+        const promotedStudent = await User.findByPk(nextWaitlisted.studentId, {
+          attributes: ["id", "email", "firstName", "lastName"],
         });
-        if (nextWaitlisted) {
-          nextWaitlisted.status = "registered";
-          nextWaitlisted.waitlistPosition = null;
-          await nextWaitlisted.save();
+        if (promotedStudent && eventRecord) {
+          eventBus.publish("registration.promoted", {
+            eventId: req.params.id,
+            eventTitle: eventRecord.get("title") as string,
+            studentId: nextWaitlisted.studentId,
+            studentEmail: promotedStudent.get("email") as string,
+            studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
+            registrationId: nextWaitlisted.id,
+          });
         }
       }
     }
-
-    res.json({ message: "Registration cancelled successfully." });
   } catch (error) {
     console.error("Cancel Registration Error:", error);
     res.status(500).json({ message: "Internal server error." });

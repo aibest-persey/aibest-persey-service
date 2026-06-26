@@ -7,6 +7,7 @@ import authRoutes from "./src/routes/auth-routes.js";
 import eventRoutes from "./src/routes/event-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
+import "./src/workers/notification-worker.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
