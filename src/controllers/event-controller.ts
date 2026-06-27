@@ -61,51 +61,68 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
 
 // GET /api/events — students see published + cancelled; organisers see their own (all) + others' published/cancelled
 // Query params:
-//   ?upcoming=true          — only events with date >= now
-//   ?status=draft           — organisers only: filter to their own drafts
-//   ?status=published       — filter to published events
-//   ?status=cancelled       — filter to cancelled events
+//   ?upcoming=true    — only events with date >= now
+//   ?status=draft     — organisers only: their own drafts
+//   ?status=published — published events (all roles)
+//   ?status=cancelled — organisers only: their own cancelled events
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
     const userId = req.user!.id;
     const { upcoming, status } = req.query as { upcoming?: string; status?: string };
 
-    // Base visibility: students see published + cancelled; organisers see own events + others' published/cancelled
-    let where: any = isOrganiser
-      ? { [Op.or]: [{ organiserId: userId }, { status: ["published", "cancelled"] }] }
-      : { status: ["published", "cancelled"] };
+    const visibleStatuses = { [Op.in]: ["published", "cancelled"] as const };
 
-    // Organisers can additionally filter by status
-    if (isOrganiser && status === "draft") {
+    // Base visibility:
+    //   students    → published + cancelled events only
+    //   organisers  → their own events (any status) + everyone else's published/cancelled
+    let where: any = isOrganiser
+      ? { [Op.or]: [{ organiserId: userId }, { status: visibleStatuses }] }
+      : { status: visibleStatuses };
+
+    // Optional status filter narrows the base visibility
+    if (status === "draft" && isOrganiser) {
+      // Drafts are private — show only the caller's own drafts
       where = { organiserId: userId, status: "draft" };
-    } else if (isOrganiser && status === "cancelled") {
-      where = { organiserId: userId, status: "cancelled" };
     } else if (status === "published") {
-      where = isOrganiser
-        ? { [Op.or]: [{ organiserId: userId, status: "published" }, { status: "published" }] }
-        : { status: "published" };
+      // All roles can filter to published events
+      where = { status: "published" };
+    } else if (status === "cancelled" && isOrganiser) {
+      // Cancelled filter for organisers scopes to their own cancelled events
+      where = { organiserId: userId, status: "cancelled" };
     }
 
-    // Filter to upcoming events only
+    // Narrow to future events when requested
     if (upcoming === "true") {
-      where = { ...where, date: { [Op.gte]: new Date() } };
+      where = { [Op.and]: [where, { date: { [Op.gte]: new Date() } }] };
     }
 
     const events = await Event.findAll({ where, order: [["date", "ASC"]] });
 
-    // Fetch active registrations for these events in one query (excludes cancelled)
-    const eventIds = events.map(e => e.id);
-    const registrations = eventIds.length
-      ? await Registration.findAll({ where: { eventId: eventIds, status: ["registered", "waitlisted"] } })
-      : [];
+    if (events.length === 0) {
+      res.json([]);
+      return;
+    }
 
-    // Build registration count map (registered only) and current user's status per event
+    // Fetch all active registrations for these events in a single query
+    const eventIds = events.map(e => e.id);
+    const registrations = await Registration.findAll({
+      where: {
+        eventId: { [Op.in]: eventIds },
+        status: { [Op.in]: ["registered", "waitlisted"] },
+      },
+    });
+
+    // Build per-event maps: confirmed seat count + current user's registration status
     const countMap: Record<string, number> = {};
     const userStatusMap: Record<string, string> = {};
     for (const r of registrations) {
-      if (r.status === "registered") countMap[r.eventId] = (countMap[r.eventId] ?? 0) + 1;
-      if (r.studentId === userId) userStatusMap[r.eventId] = r.status;
+      if (r.status === "registered") {
+        countMap[r.eventId] = (countMap[r.eventId] ?? 0) + 1;
+      }
+      if (r.studentId === userId) {
+        userStatusMap[r.eventId] = r.status;
+      }
     }
 
     const result = events.map(e => ({
