@@ -6,7 +6,7 @@ declare global {
       user?: {
         id: string;
         username: string;
-        role: "student" | "organiser";
+        role: "student" | "organiser" | "admin";
         iat?: number;
         exp?: number;
       } & JwtPayload;

@@ -19,7 +19,7 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction): vo
     const verified = jwt.verify(token, process.env.JWT_SECRET) as {
       id: string;
       username: string;
-      role: "student" | "organiser";
+      role: "student" | "organiser" | "admin";
       iat?: number;
       exp?: number;
     };
@@ -41,6 +41,14 @@ export const requireStudent = (req: Request, res: Response, next: NextFunction):
 export const requireOrganiser = (req: Request, res: Response, next: NextFunction): void => {
   if (req.user?.role !== "organiser") {
     res.status(403).json({ message: "Forbidden: organiser access only." });
+    return;
+  }
+  next();
+};
+
+export const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.user?.role !== "admin") {
+    res.status(403).json({ message: "Forbidden: admin access only." });
     return;
   }
   next();

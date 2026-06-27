@@ -3,7 +3,7 @@ import sequelize from "../clients/postgres-client.js";
 
 interface UserAttributes {
   id: string;
-  role: "student" | "organiser";
+  role: "student" | "organiser" | "admin";
   firstName: string | null;
   lastName: string | null;
   username: string;
@@ -22,7 +22,7 @@ interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" 
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
-  declare role: "student" | "organiser";
+  declare role: "student" | "organiser" | "admin";
   declare firstName: string | null;
   declare lastName: string | null;
   declare username: string;
@@ -45,7 +45,7 @@ User.init(
       primaryKey: true,
     },
     role: {
-      type: DataTypes.ENUM("student", "organiser"),
+      type: DataTypes.ENUM("student", "organiser", "admin"),
       allowNull: false,
       defaultValue: "student",
     },
