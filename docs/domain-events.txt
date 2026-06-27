@@ -1,0 +1,104 @@
+DOMAIN EVENTS — aibest-persey-service
+======================================
+
+OVERVIEW
+--------
+All domain events are defined in src/events/event-types.ts.
+The event bus implementation is in src/events/event-bus.ts.
+Notification handlers are in src/workers/notification-worker.ts.
+
+Events fire after their database transaction commits, so a handler
+never fires for a write that was rolled back.
+
+The InProcessEventBus uses setImmediate to defer handlers off the
+request path. The IEventBus interface allows the implementation to be
+swapped for Redis / BullMQ / SQS without touching publishers or
+subscribers.
+
+
+EVENTS
+------
+
+1. registration.confirmed
+   Trigger  : Student registers and a confirmed seat is available
+   Publisher: registerForEvent (POST /api/events/:id/register)
+   Payload  :
+     eventId        string
+     eventTitle     string
+     studentId      string
+     studentEmail   string
+     studentName    string
+     registrationId string
+   Handler  : Send registration confirmation email to studentEmail
+
+2. registration.waitlisted
+   Trigger  : Student registers but the event has reached max capacity
+   Publisher: registerForEvent (POST /api/events/:id/register)
+   Payload  :
+     eventId         string
+     eventTitle      string
+     studentId       string
+     studentEmail    string
+     studentName     string
+     registrationId  string
+     waitlistPosition number
+   Handler  : Send waitlist confirmation email including position number
+
+3. registration.promoted
+   Trigger  : A confirmed student cancels, freeing a seat for the next
+              waitlisted student
+   Publisher: cancelRegistration (DELETE /api/events/:id/register)
+   Payload  :
+     eventId        string
+     eventTitle     string
+     studentId      string
+     studentEmail   string
+     studentName    string
+     registrationId string
+   Handler  : Send "you've been moved off the waitlist" email to studentEmail
+
+4. registration.cancelled
+   Trigger  : Student cancels their own registration (confirmed or waitlisted)
+   Publisher: cancelRegistration (DELETE /api/events/:id/register)
+   Payload  :
+     eventId        string
+     eventTitle     string
+     studentId      string
+     studentEmail   string
+     studentName    string
+     registrationId string
+   Handler  : Send cancellation confirmation email to studentEmail
+
+5. event.cancelled
+   Trigger  : Organiser cancels an event
+   Publisher: cancelEvent (PATCH /api/events/:id/cancel)
+   Payload  :
+     eventId      string
+     eventTitle   string
+     organiserId  string
+   Handler  : Query registrations WHERE eventId = payload.eventId AND
+              status = 'registered', then send cancellation notice to
+              each attendee. Payload intentionally carries only event
+              identity to keep it small regardless of attendee count.
+
+
+DESIGN DECISIONS
+----------------
+- event.cancelled does not embed a recipient list in the payload.
+  The notification worker queries registrations by eventId at handler
+  time. This keeps the event payload small and decouples the publisher
+  from knowing how many attendees exist.
+
+- Promotion only runs when the cancelled registration was confirmed
+  (status = 'registered') and the event still has a capacity limit and
+  is still published. This guards against promoting a student into an
+  event that was concurrently cancelled by the organiser.
+
+- Cancellation and waitlist promotion happen inside a single database
+  transaction with a row-level lock on the event. Concurrent
+  cancellations queue behind the lock, ensuring each freed seat
+  promotes exactly one waitlisted student.
+
+- Waitlisted registrations are cleared atomically when an organiser
+  cancels an event, preventing students from remaining in a waitlisted
+  state on a cancelled event.

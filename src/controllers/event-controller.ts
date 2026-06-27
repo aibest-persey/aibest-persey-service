@@ -353,6 +353,13 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
     });
 
     res.json(event);
+
+    // Notify subscribers — consumers query registrations by eventId to reach attendees
+    eventBus.publish("event.cancelled", {
+      eventId: event.id,
+      eventTitle: event.title,
+      organiserId: event.organiserId,
+    });
   } catch (error) {
     console.error("Cancel Event Error:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -531,28 +538,34 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
 
     res.json({ message: "Registration cancelled successfully." });
 
-    // Domain events are fire-and-forget after the transaction commits
-    eventBus.publish("registration.cancelled", {
-      eventId,
-      eventTitle,
-      studentId,
-      registrationId: cancelledRegistrationId,
-    });
+    // Fetch email details for domain events — both in parallel to minimise latency
+    const [cancellingStudent, promotedStudent] = await Promise.all([
+      User.findByPk(studentId, { attributes: ["id", "email", "firstName", "lastName"] }),
+      promotedStudentId
+        ? User.findByPk(promotedStudentId, { attributes: ["id", "email", "firstName", "lastName"] })
+        : Promise.resolve(null),
+    ]);
 
-    if (promotedStudentId && promotedRegistrationId) {
-      const promotedStudent = await User.findByPk(promotedStudentId, {
-        attributes: ["id", "email", "firstName", "lastName"],
+    if (cancellingStudent) {
+      eventBus.publish("registration.cancelled", {
+        eventId,
+        eventTitle,
+        studentId,
+        studentEmail: cancellingStudent.get("email") as string,
+        studentName: `${cancellingStudent.get("firstName")} ${cancellingStudent.get("lastName")}`,
+        registrationId: cancelledRegistrationId,
       });
-      if (promotedStudent) {
-        eventBus.publish("registration.promoted", {
-          eventId,
-          eventTitle,
-          studentId: promotedStudentId,
-          studentEmail: promotedStudent.get("email") as string,
-          studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
-          registrationId: promotedRegistrationId,
-        });
-      }
+    }
+
+    if (promotedStudentId && promotedRegistrationId && promotedStudent) {
+      eventBus.publish("registration.promoted", {
+        eventId,
+        eventTitle,
+        studentId: promotedStudentId,
+        studentEmail: promotedStudent.get("email") as string,
+        studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
+        registrationId: promotedRegistrationId,
+      });
     }
   } catch (error: any) {
     if (error.code === 404) {
