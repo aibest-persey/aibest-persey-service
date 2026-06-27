@@ -1,0 +1,36 @@
+<svg viewBox="0 0 1280 800" width="1280" height="800" xmlns="http://www.w3.org/2000/svg">
+<defs><style>
+text{font-family:Inter,Arial,sans-serif}
+.tp{fill:#2B2A28}.tsx{fill:#6B6A64}.tm{fill:#9A9991}.white{fill:#FFFFFF}.wd{fill:#D9DCFE}
+.blue{fill:#5661F2}
+.field{fill:#FAF9F6;stroke:#E8E6DF;stroke-width:1}
+.card{fill:#FFFFFF;stroke:#E8E6DF;stroke-width:1}
+.ln{stroke:#E8E6DF;stroke-width:1}
+</style></defs>
+<rect width="1280" height="800" fill="#FFFFFF"/>
+<rect x="0" y="0" width="1280" height="44" fill="#F4F2EC"/><line x1="0" y1="44" x2="1280" y2="44" class="ln"/>
+<circle cx="22" cy="22" r="5" fill="#EB5757"/><circle cx="40" cy="22" r="5" fill="#F2C94C"/><circle cx="58" cy="22" r="5" fill="#27AE60"/>
+<rect x="86" y="12" width="420" height="22" rx="7" class="card"/><text x="100" y="27" font-size="11" class="tm">events.school.edu/sign-up</text>
+<rect x="0" y="44" width="460" height="756" class="blue"/>
+<rect x="48" y="86" width="32" height="32" rx="9" fill="#FFFFFF" fill-opacity="0.2"/><rect x="62.5" y="92" width="3" height="20" rx="1.5" class="white"/><rect x="54" y="100.5" width="20" height="3" rx="1.5" class="white"/>
+<text x="92" y="108" font-size="16" font-weight="500" class="white">Eventized</text>
+<text x="48" y="350" font-size="30" font-weight="500" class="white">Join your campus</text>
+<text x="48" y="390" font-size="30" font-weight="500" class="white">community.</text>
+<text x="48" y="436" font-size="14" class="wd">Create an account to save events</text>
+<text x="48" y="458" font-size="14" class="wd">and follow organizers.</text>
+<text x="660" y="150" font-size="24" font-weight="500" class="tp">Sign up</text>
+<text x="660" y="176" font-size="13" class="tsx">Let's get you started</text>
+<text x="660" y="218" font-size="12" class="tsx">First name</text>
+<rect x="660" y="228" width="222" height="44" rx="10" class="field"/><text x="676" y="254" font-size="13" class="tp">Alex</text>
+<text x="906" y="218" font-size="12" class="tsx">Last name</text>
+<rect x="906" y="228" width="222" height="44" rx="10" class="field"/><text x="922" y="254" font-size="13" class="tp">Rivera</text>
+<text x="660" y="300" font-size="12" class="tsx">Email</text>
+<rect x="660" y="310" width="468" height="44" rx="10" class="field"/><text x="676" y="336" font-size="13" class="tm">alex@school.edu</text>
+<text x="660" y="382" font-size="12" class="tsx">Password</text>
+<rect x="660" y="392" width="222" height="44" rx="10" class="field"/><text x="676" y="418" font-size="15" letter-spacing="2" class="tm">••••••••</text>
+<text x="906" y="382" font-size="12" class="tsx">Confirm password</text>
+<rect x="906" y="392" width="222" height="44" rx="10" class="field"/><text x="922" y="418" font-size="15" letter-spacing="2" class="tm">••••••••</text>
+<rect x="660" y="468" width="468" height="48" rx="10" class="blue"/><text x="894" y="498" text-anchor="middle" font-size="14" font-weight="500" class="white">Sign up</text>
+<rect x="660" y="532" width="468" height="46" rx="10" class="card"/><text x="852" y="560" font-size="15" font-weight="600" fill="#5661F2">G</text><text x="894" y="560" text-anchor="middle" font-size="13" class="tp">Sign up with Google</text>
+<text x="780" y="610" font-size="12.5" class="tsx">Already have an account?</text><text x="936" y="610" font-size="12.5" font-weight="500" fill="#5661F2">Sign in</text>
+</svg>

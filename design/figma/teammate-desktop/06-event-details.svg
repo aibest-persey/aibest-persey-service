@@ -1,0 +1,37 @@
+<svg viewBox="0 0 1280 800" width="1280" height="800" xmlns="http://www.w3.org/2000/svg">
+<defs><style>
+text{font-family:Inter,Arial,sans-serif}
+.tp{fill:#2B2A28}.tsx{fill:#6B6A64}.tm{fill:#9A9991}.white{fill:#FFFFFF}
+.blue{fill:#5661F2}.blueBg{fill:#ECEDFE}
+.card{fill:#FFFFFF;stroke:#E8E6DF;stroke-width:1}
+.ln{stroke:#E8E6DF;stroke-width:1}
+.icoB{fill:none;stroke:#5661F2;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.icoD{fill:none;stroke:#333333;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tealStroke{fill:none;stroke:#5661F2;stroke-width:1.4}
+</style></defs>
+<rect width="1280" height="800" fill="#FFFFFF"/>
+<rect x="0" y="0" width="1280" height="44" fill="#F4F2EC"/><line x1="0" y1="44" x2="1280" y2="44" class="ln"/>
+<circle cx="22" cy="22" r="5" fill="#EB5757"/><circle cx="40" cy="22" r="5" fill="#F2C94C"/><circle cx="58" cy="22" r="5" fill="#27AE60"/>
+<rect x="86" y="12" width="420" height="22" rx="7" class="card"/><text x="100" y="27" font-size="11" class="tm">events.school.edu/events/intl-band</text>
+<rect x="64" y="80" width="700" height="240" rx="16" fill="#5B4FC4"/>
+<circle cx="98" cy="114" r="17" class="white"/><path d="M102 108 L96 114 L102 120 M96 114 H104" class="icoD"/>
+<circle cx="730" cy="114" r="17" class="white"/><circle cx="724" cy="110" r="2" class="icoD"/><circle cx="736" cy="106" r="2" class="icoD"/><circle cx="736" cy="120" r="2" class="icoD"/><path d="M726 111 l8 -4 M726 117 l8 3" class="icoD"/>
+<rect x="84" y="280" width="150" height="28" rx="14" fill="#000000" fill-opacity="0.4"/><text x="159" y="298" text-anchor="middle" font-size="12" class="white">Music · Live</text>
+<text x="64" y="360" font-size="24" font-weight="500" class="tp">International band music concert</text>
+<rect x="64" y="384" width="38" height="38" rx="10" class="blueBg"/><rect x="74" y="395" width="18" height="16" rx="2.5" class="icoB"/><line x1="74" y1="400" x2="92" y2="400" class="icoB"/><line x1="79" y1="391" x2="79" y2="396" class="icoB"/><line x1="87" y1="391" x2="87" y2="396" class="icoB"/>
+<text x="116" y="400" font-size="14" font-weight="500" class="tp">14 December, 2021</text><text x="116" y="418" font-size="11.5" class="tsx">Tuesday, 4:00 PM – 9:00 PM</text>
+<rect x="64" y="436" width="38" height="38" rx="10" class="blueBg"/><path d="M83 444 a7 7 0 0 1 7 7 c0 5 -7 12 -7 12 s-7 -7 -7 -12 a7 7 0 0 1 7 -7 z" class="icoB"/><circle cx="83" cy="451" r="2.6" class="icoB"/>
+<text x="116" y="452" font-size="14" font-weight="500" class="tp">Gala Convention Center</text><text x="116" y="470" font-size="11.5" class="tsx">36 Guild Street, New York</text>
+<text x="64" y="516" font-size="15" font-weight="500" class="tp">About event</text>
+<text x="64" y="542" font-size="13" class="tsx">Enjoy your favorite artists live on one stage. A night of international bands,</text>
+<text x="64" y="562" font-size="13" class="tsx">food trucks and unforgettable performances — open to all students.</text>
+<rect x="804" y="80" width="412" height="300" rx="16" class="card"/>
+<circle cx="838" cy="124" r="20" fill="#FAD4C0"/><text x="868" y="120" font-size="14" font-weight="500" class="tp">Ashfak Sayem</text><text x="868" y="138" font-size="11.5" class="tsx">Organizer</text>
+<rect x="1108" y="108" width="88" height="32" rx="16" class="tealStroke"/><text x="1152" y="128" text-anchor="middle" font-size="12.5" font-weight="500" fill="#5661F2">Follow</text>
+<line x1="828" y1="166" x2="1192" y2="166" class="ln"/>
+<text x="828" y="196" font-size="11.5" class="tm">Price from</text><text x="828" y="222" font-size="22" font-weight="500" class="tp">$25</text>
+<circle cx="1040" cy="208" r="13" fill="#C9CDFB" stroke="#FFFFFF" stroke-width="2"/><circle cx="1062" cy="208" r="13" fill="#BFE3D6" stroke="#FFFFFF" stroke-width="2"/><circle cx="1084" cy="208" r="13" fill="#F4D06A" stroke="#FFFFFF" stroke-width="2"/><text x="1104" y="212" font-size="11.5" class="tsx">+240 going</text>
+<rect x="828" y="252" width="364" height="50" rx="12" class="blue"/><text x="1010" y="282" text-anchor="middle" font-size="14.5" font-weight="500" class="white">Register now</text>
+<rect x="828" y="316" width="176" height="44" rx="12" class="card"/><text x="916" y="343" text-anchor="middle" font-size="13" class="tsx">Save</text>
+<rect x="1016" y="316" width="176" height="44" rx="12" class="card"/><text x="1104" y="343" text-anchor="middle" font-size="13" class="tsx">Share</text>
+</svg>

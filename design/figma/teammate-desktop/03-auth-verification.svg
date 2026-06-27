@@ -1,0 +1,32 @@
+<svg viewBox="0 0 1280 800" width="1280" height="800" xmlns="http://www.w3.org/2000/svg">
+<defs><style>
+text{font-family:Inter,Arial,sans-serif}
+.tp{fill:#2B2A28}.tsx{fill:#6B6A64}.tm{fill:#9A9991}.white{fill:#FFFFFF}.wd{fill:#D9DCFE}
+.blue{fill:#5661F2}.blueBg{fill:#ECEDFE}
+.field{fill:#FAF9F6;stroke:#E8E6DF;stroke-width:1}
+.card{fill:#FFFFFF;stroke:#E8E6DF;stroke-width:1}
+.otp{fill:#FAF9F6;stroke:#E8E6DF;stroke-width:1}
+.otpA{fill:#FAF9F6;stroke:#5661F2;stroke-width:1.5}
+.ln{stroke:#E8E6DF;stroke-width:1}
+.icoB{fill:none;stroke:#5661F2;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style></defs>
+<rect width="1280" height="800" fill="#FFFFFF"/>
+<rect x="0" y="0" width="1280" height="44" fill="#F4F2EC"/><line x1="0" y1="44" x2="1280" y2="44" class="ln"/>
+<circle cx="22" cy="22" r="5" fill="#EB5757"/><circle cx="40" cy="22" r="5" fill="#F2C94C"/><circle cx="58" cy="22" r="5" fill="#27AE60"/>
+<rect x="86" y="12" width="420" height="22" rx="7" class="card"/><text x="100" y="27" font-size="11" class="tm">events.school.edu/verify</text>
+<rect x="0" y="44" width="460" height="756" class="blue"/>
+<rect x="48" y="86" width="32" height="32" rx="9" fill="#FFFFFF" fill-opacity="0.2"/><rect x="62.5" y="92" width="3" height="20" rx="1.5" class="white"/><rect x="54" y="100.5" width="20" height="3" rx="1.5" class="white"/>
+<text x="92" y="108" font-size="16" font-weight="500" class="white">Eventized</text>
+<text x="48" y="360" font-size="30" font-weight="500" class="white">Almost there.</text>
+<text x="48" y="406" font-size="14" class="wd">We sent a 4-digit code to keep</text>
+<text x="48" y="428" font-size="14" class="wd">your account secure.</text>
+<rect x="754" y="196" width="56" height="56" rx="16" class="blueBg"/><path d="M782 212 l14 5 v8 c0 9 -8 14 -14 17 c-6 -3 -14 -8 -14 -17 v-8 z" class="icoB"/><path d="M777 228 l4 4 8 -9" class="icoB"/>
+<text x="782" y="296" text-anchor="middle" font-size="24" font-weight="500" class="tp">Verification</text>
+<text x="782" y="324" text-anchor="middle" font-size="13" class="tsx">Enter the code we sent to alex@school.edu</text>
+<rect x="662" y="362" width="56" height="64" rx="12" class="otp"/><text x="690" y="404" text-anchor="middle" font-size="26" font-weight="500" class="tp">4</text>
+<rect x="730" y="362" width="56" height="64" rx="12" class="otp"/><text x="758" y="404" text-anchor="middle" font-size="26" font-weight="500" class="tp">4</text>
+<rect x="798" y="362" width="56" height="64" rx="12" class="otpA"/><text x="826" y="404" text-anchor="middle" font-size="26" font-weight="500" class="tp">2</text>
+<rect x="866" y="362" width="56" height="64" rx="12" class="otp"/><text x="894" y="404" text-anchor="middle" font-size="26" class="tm">–</text>
+<rect x="662" y="458" width="260" height="48" rx="10" class="blue"/><text x="792" y="488" text-anchor="middle" font-size="14" font-weight="500" class="white">Continue</text>
+<text x="792" y="536" text-anchor="middle" font-size="12.5" class="tsx">Resend code in 0:25</text>
+</svg>

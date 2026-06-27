@@ -13,7 +13,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "School Events & Notification Center Backend",
+  "description": "",
   "dependencies": {
     "@upstash/redis": "^1.38.0",
     "bcrypt": "^6.0.0",
