@@ -3,6 +3,7 @@ import {
   createEvent,
   listEvents,
   getEvent,
+  getMyRegistrations,
   updateEvent,
   publishEvent,
   unpublishEvent,
@@ -17,6 +18,7 @@ import { verifyToken, requireOrganiser, requireStudent } from "../middleware/aut
 const router: Router = express.Router();
 
 router.get("/", verifyToken, listEvents);
+router.get("/my-registrations", verifyToken, requireStudent, getMyRegistrations);
 router.get("/:id", verifyToken, getEvent);
 router.post("/", verifyToken, requireOrganiser, createEvent);
 router.put("/:id", verifyToken, requireOrganiser, updateEvent);

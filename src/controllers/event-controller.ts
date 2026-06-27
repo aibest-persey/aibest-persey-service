@@ -582,6 +582,31 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
   }
 };
 
+// GET /api/events/my-registrations — student only, their own active registrations with event details
+export const getMyRegistrations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const registrations = await Registration.findAll({
+      where: {
+        studentId: req.user!.id,
+        status: { [Op.in]: ["registered", "waitlisted"] },
+      },
+      order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: Event,
+          as: "event",
+          attributes: ["id", "title", "location", "date", "status", "maxCapacity"],
+        },
+      ],
+    });
+
+    res.json(registrations);
+  } catch (error) {
+    console.error("Get My Registrations Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 // GET /api/events/:id/participants — organiser only
 export const getParticipants = async (req: Request, res: Response): Promise<void> => {
   try {
