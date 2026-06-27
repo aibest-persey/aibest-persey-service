@@ -180,6 +180,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     });
     const isRegistered = myRegistration?.status === "registered";
     const isWaitlisted = myRegistration?.status === "waitlisted";
+    const waitlistPosition = myRegistration?.waitlistPosition ?? null;
 
     // Owners get a preview of the 5 most recent active registrations for their detail page
     let recentRegistrations = null;
@@ -204,6 +205,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
       registrationCount,
       isRegistered,
       isWaitlisted,
+      waitlistPosition,
       isOwner,
       ...(isOwner && { recentRegistrations }),
     });
