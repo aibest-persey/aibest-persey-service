@@ -35,13 +35,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [{ username }, { email }],
-      },
-    });
-    if (existingUser) {
-      res.status(400).json({ message: "Username or email already exists." });
+    const existingByUsername = await User.findOne({ where: { username } });
+    if (existingByUsername) {
+      res.status(400).json({ message: "Username already taken." });
+      return;
+    }
+
+    const existingByEmail = await User.findOne({ where: { email } });
+    if (existingByEmail) {
+      res.status(400).json({ message: "An account with this email already exists." });
       return;
     }
 
