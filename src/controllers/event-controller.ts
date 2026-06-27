@@ -147,8 +147,9 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
     const userId = req.user!.id;
+    const { id } = req.params as { id: string };
 
-    const event = await Event.findByPk(req.params.id);
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -175,7 +176,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
 
     // Check current user's registration status for this event
     const myRegistration = await Registration.findOne({
-      where: { eventId: event.id, studentId: userId, status: ["registered", "waitlisted"] },
+      where: { eventId: event.id, studentId: userId, status: { [Op.in]: ["registered", "waitlisted"] } },
     });
     const isRegistered = myRegistration?.status === "registered";
     const isWaitlisted = myRegistration?.status === "waitlisted";
@@ -184,7 +185,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     let recentRegistrations = null;
     if (isOwner) {
       recentRegistrations = await Registration.findAll({
-        where: { eventId: event.id, status: ["registered", "waitlisted"] },
+        where: { eventId: event.id, status: { [Op.in]: ["registered", "waitlisted"] } },
         order: [["createdAt", "DESC"]],
         limit: 5,
         include: [
@@ -215,7 +216,8 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
 // PUT /api/events/:id — organiser only, update their own draft event
 export const updateEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -258,7 +260,8 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
 // PATCH /api/events/:id/publish — organiser only, publish a draft
 export const publishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -288,7 +291,8 @@ export const publishEvent = async (req: Request, res: Response): Promise<void> =
 // PATCH /api/events/:id/unpublish — organiser only, revert to draft
 export const unpublishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -318,7 +322,8 @@ export const unpublishEvent = async (req: Request, res: Response): Promise<void>
 // PATCH /api/events/:id/cancel — organiser only, cancel a published or draft event
 export const cancelEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -348,7 +353,8 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
 // DELETE /api/events/:id — organiser only, delete their own event
 export const deleteEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -373,7 +379,7 @@ export const deleteEvent = async (req: Request, res: Response): Promise<void> =>
 // POST /api/events/:id/register — student only
 export const registerForEvent = async (req: Request, res: Response): Promise<void> => {
   // Pre-flight checks outside the transaction (no locks needed, fast-fail)
-  const eventId = req.params.id;
+  const eventId = (req.params as { id: string }).id;
   const studentId = req.user!.id;
 
   const eventCheck = await Event.findByPk(eventId);
@@ -399,7 +405,7 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
 
       // Check for existing active registration inside the lock
       const existing = await Registration.findOne({
-        where: { eventId, studentId, status: ["registered", "waitlisted"] },
+        where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } },
         transaction: t,
       });
       if (existing) throw Object.assign(new Error("conflict"), { code: 409 });
@@ -467,8 +473,9 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
 // DELETE /api/events/:id/register — student cancels their own registration
 export const cancelRegistration = async (req: Request, res: Response): Promise<void> => {
   try {
+    const eventId = (req.params as { id: string }).id;
     const registration = await Registration.findOne({
-      where: { eventId: req.params.id, studentId: req.user!.id, status: ["registered", "waitlisted"] },
+      where: { eventId, studentId: req.user!.id, status: { [Op.in]: ["registered", "waitlisted"] } },
     });
 
     if (!registration) {
@@ -485,13 +492,13 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
 
     // Publish cancellation event and handle auto-promotion asynchronously
     const [eventRecord, cancellingStudent] = await Promise.all([
-      Event.findByPk(req.params.id, { attributes: ["id", "title", "maxCapacity"] }),
+      Event.findByPk(eventId, { attributes: ["id", "title", "maxCapacity"] }),
       User.findByPk(req.user!.id, { attributes: ["id", "email", "firstName", "lastName"] }),
     ]);
 
     if (eventRecord && cancellingStudent) {
       eventBus.publish("registration.cancelled", {
-        eventId: req.params.id,
+        eventId,
         eventTitle: eventRecord.get("title") as string,
         studentId: req.user!.id,
         registrationId: registration.id,
@@ -501,7 +508,7 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
     // Auto-promote next waitlisted student if a confirmed spot opened up
     if (wasRegistered && eventRecord?.maxCapacity !== null) {
       const nextWaitlisted = await Registration.findOne({
-        where: { eventId: req.params.id, status: "waitlisted" },
+        where: { eventId, status: "waitlisted" },
         order: [["waitlistPosition", "ASC"]],
       });
       if (nextWaitlisted) {
@@ -515,7 +522,7 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
         });
         if (promotedStudent && eventRecord) {
           eventBus.publish("registration.promoted", {
-            eventId: req.params.id,
+            eventId,
             eventTitle: eventRecord.get("title") as string,
             studentId: nextWaitlisted.studentId,
             studentEmail: promotedStudent.get("email") as string,
@@ -534,7 +541,8 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
 // GET /api/events/:id/participants — organiser only
 export const getParticipants = async (req: Request, res: Response): Promise<void> => {
   try {
-    const event = await Event.findByPk(req.params.id);
+    const { id } = req.params as { id: string };
+    const event = await Event.findByPk(id);
 
     if (!event) {
       res.status(404).json({ message: "Event not found." });
@@ -547,7 +555,7 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
     }
 
     const registrations = await Registration.findAll({
-      where: { eventId: req.params.id, status: ["registered", "waitlisted"] },
+      where: { eventId: id, status: { [Op.in]: ["registered", "waitlisted"] } },
       order: [["waitlistPosition", "ASC"], ["createdAt", "ASC"]],
       include: [
         {

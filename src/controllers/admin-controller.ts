@@ -25,12 +25,14 @@ export const setUserRole = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (req.params.id === req.user!.id) {
+    const { id } = req.params as { id: string };
+
+    if (id === req.user!.id) {
       res.status(400).json({ message: "You cannot change your own role." });
       return;
     }
 
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByPk(id);
     if (!user) {
       res.status(404).json({ message: "User not found." });
       return;

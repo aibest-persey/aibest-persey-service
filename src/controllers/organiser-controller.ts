@@ -18,7 +18,8 @@ export const listOrganisers = async (req: Request, res: Response): Promise<void>
 
 export const getOrganiser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await User.findByPk(req.params.id, {
+    const { id } = req.params as { id: string };
+    const user = await User.findByPk(id, {
       attributes: ["id", "username", "firstName", "lastName", "color", "bio", "organization", "website", "logoUrl"],
     });
     if (!user || user.role !== "organiser") {
