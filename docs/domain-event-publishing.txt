@@ -1,0 +1,53 @@
+DOMAIN EVENT PUBLISHING — aibest-persey-service
+================================================
+
+All event publishing is in src/controllers/event-controller.ts.
+Event type definitions are in src/events/event-types.ts.
+Event bus implementation is in src/events/event-bus.ts.
+
+
+PUBLISHED EVENTS
+----------------
+
+1. registration.confirmed
+   Published in : registerForEvent (POST /api/events/:id/register)
+   Timing       : After the registration transaction commits
+   Guarantee    : Never fires if the DB write rolled back
+
+2. registration.waitlisted
+   Published in : registerForEvent (POST /api/events/:id/register)
+   Timing       : After the registration transaction commits
+   Guarantee    : Never fires if the DB write rolled back
+
+3. registration.cancelled
+   Published in : cancelRegistration (DELETE /api/events/:id/register)
+   Timing       : After the cancellation+promotion transaction commits
+   Guarantee    : Only fires if the cancellation write succeeded
+
+4. registration.promoted
+   Published in : cancelRegistration (DELETE /api/events/:id/register)
+   Timing       : After the cancellation+promotion transaction commits,
+                  alongside registration.cancelled
+   Guarantee    : Promotion and cancellation are one transaction — both
+                  events only fire if both DB writes succeeded
+
+5. event.cancelled
+   Published in : cancelEvent (PATCH /api/events/:id/cancel)
+   Timing       : After the event status + waitlist clear transaction commits
+   Guarantee    : Waitlist clear and status change are atomic — event
+                  fires only after both commit
+
+
+CONSISTENCY RULES
+-----------------
+- All events are published after their enclosing database transaction
+  commits, never inside it. A handler will never receive an event for
+  a change that was rolled back.
+
+- Events that depend on related side effects (cancellation + promotion,
+  event cancel + waitlist clear) share a single transaction. The domain
+  events for both actions only fire together if the transaction succeeds.
+
+- Event publishing is fire-and-forget (non-blocking). Failures in a
+  notification handler do not affect the HTTP response already sent to
+  the client.

@@ -9,6 +9,7 @@ import adminRoutes from "./src/routes/admin-routes.js";
 import organiserRoutes from "./src/routes/organiser-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
+import "./src/models/NotificationJob.model.js";
 import "./src/workers/notification-worker.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
