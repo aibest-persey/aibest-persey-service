@@ -280,6 +280,11 @@ export const publishEvent = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    if (event.status === "cancelled") {
+      res.status(400).json({ message: "Cancelled events cannot be published." });
+      return;
+    }
+
     event.status = "published";
     await event.save();
 
