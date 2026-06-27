@@ -4,6 +4,10 @@ import sequelize from "../clients/postgres-client.js";
 interface UserAttributes {
   id: string;
   role: "student" | "organiser" | "admin";
+  bio: string | null;
+  organization: string | null;
+  website: string | null;
+  logoUrl: string | null;
   firstName: string | null;
   lastName: string | null;
   username: string;
@@ -18,7 +22,7 @@ interface UserAttributes {
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "resetPasswordToken" | "resetPasswordExpires"> {}
+interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -31,6 +35,10 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare authString: string | null;
   declare ip_encrypted: string | null;
   declare color: string | null;
+  declare bio: string | null;
+  declare organization: string | null;
+  declare website: string | null;
+  declare logoUrl: string | null;
   declare resetPasswordToken: string | null;
   declare resetPasswordExpires: number | null;
   declare readonly createdAt?: Date;
@@ -51,6 +59,22 @@ User.init(
     },
     firstName: {
       type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    bio: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    organization: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    website: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    logoUrl: {
+      type: DataTypes.STRING(255),
       allowNull: true,
     },
     lastName: {

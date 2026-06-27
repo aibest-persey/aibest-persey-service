@@ -6,6 +6,7 @@ import dns from "node:dns";
 import authRoutes from "./src/routes/auth-routes.js";
 import eventRoutes from "./src/routes/event-routes.js";
 import adminRoutes from "./src/routes/admin-routes.js";
+import organiserRoutes from "./src/routes/organiser-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
 import "./src/workers/notification-worker.js";
@@ -23,6 +24,7 @@ server.use(express.json());
 server.use("/api/auth", authRoutes);
 server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
+server.use("/api/organisers", organiserRoutes);
 
 server.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));
