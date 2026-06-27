@@ -342,8 +342,15 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    event.status = "cancelled";
-    await event.save();
+    await sequelize.transaction(async (t) => {
+      event.status = "cancelled";
+      await event.save({ transaction: t });
+      // Waitlisted entries are meaningless on a cancelled event — clear them atomically
+      await Registration.update(
+        { status: "cancelled", waitlistPosition: null },
+        { where: { eventId: event.id, status: "waitlisted" }, transaction: t },
+      );
+    });
 
     res.json(event);
   } catch (error) {
@@ -474,67 +481,84 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
 
 // DELETE /api/events/:id/register — student cancels their own registration
 export const cancelRegistration = async (req: Request, res: Response): Promise<void> => {
+  const eventId = (req.params as { id: string }).id;
+  const studentId = req.user!.id;
+
+  // Capture post-commit data for domain events
+  let cancelledRegistrationId = "";
+  let eventTitle = "";
+  let promotedStudentId: string | null = null;
+  let promotedRegistrationId: string | null = null;
+
   try {
-    const eventId = (req.params as { id: string }).id;
-    const registration = await Registration.findOne({
-      where: { eventId, studentId: req.user!.id, status: { [Op.in]: ["registered", "waitlisted"] } },
+    await sequelize.transaction(async (t) => {
+      // Lock the event row — serialises concurrent cancellations on the same event so
+      // only one promotion runs at a time and the event status is read consistently
+      const event = await Event.findByPk(eventId, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!event) throw Object.assign(new Error("event_not_found"), { code: 404 });
+
+      const registration = await Registration.findOne({
+        where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } },
+        transaction: t,
+      });
+      if (!registration) throw Object.assign(new Error("not_found"), { code: 404 });
+
+      const wasRegistered = registration.status === "registered";
+      registration.status = "cancelled";
+      registration.waitlistPosition = null;
+      await registration.save({ transaction: t });
+
+      cancelledRegistrationId = registration.id;
+      eventTitle = event.title;
+
+      // Only promote when a confirmed seat was freed and the event is still published
+      // (guards against promoting into an event that was cancelled concurrently)
+      if (wasRegistered && event.maxCapacity !== null && event.status === "published") {
+        const next = await Registration.findOne({
+          where: { eventId, status: "waitlisted" },
+          order: [["waitlistPosition", "ASC"]],
+          transaction: t,
+        });
+        if (next) {
+          next.status = "registered";
+          next.waitlistPosition = null;
+          await next.save({ transaction: t });
+          promotedStudentId = next.studentId;
+          promotedRegistrationId = next.id;
+        }
+      }
     });
-
-    if (!registration) {
-      res.status(404).json({ message: "Registration not found." });
-      return;
-    }
-
-    const wasRegistered = registration.status === "registered";
-    registration.status = "cancelled";
-    registration.waitlistPosition = null;
-    await registration.save();
 
     res.json({ message: "Registration cancelled successfully." });
 
-    // Publish cancellation event and handle auto-promotion asynchronously
-    const [eventRecord, cancellingStudent] = await Promise.all([
-      Event.findByPk(eventId, { attributes: ["id", "title", "maxCapacity"] }),
-      User.findByPk(req.user!.id, { attributes: ["id", "email", "firstName", "lastName"] }),
-    ]);
+    // Domain events are fire-and-forget after the transaction commits
+    eventBus.publish("registration.cancelled", {
+      eventId,
+      eventTitle,
+      studentId,
+      registrationId: cancelledRegistrationId,
+    });
 
-    if (eventRecord && cancellingStudent) {
-      eventBus.publish("registration.cancelled", {
-        eventId,
-        eventTitle: eventRecord.get("title") as string,
-        studentId: req.user!.id,
-        registrationId: registration.id,
+    if (promotedStudentId && promotedRegistrationId) {
+      const promotedStudent = await User.findByPk(promotedStudentId, {
+        attributes: ["id", "email", "firstName", "lastName"],
       });
-    }
-
-    // Auto-promote next waitlisted student if a confirmed spot opened up
-    if (wasRegistered && eventRecord?.maxCapacity !== null) {
-      const nextWaitlisted = await Registration.findOne({
-        where: { eventId, status: "waitlisted" },
-        order: [["waitlistPosition", "ASC"]],
-      });
-      if (nextWaitlisted) {
-        nextWaitlisted.status = "registered";
-        nextWaitlisted.waitlistPosition = null;
-        await nextWaitlisted.save();
-
-        // Notify the promoted student
-        const promotedStudent = await User.findByPk(nextWaitlisted.studentId, {
-          attributes: ["id", "email", "firstName", "lastName"],
+      if (promotedStudent) {
+        eventBus.publish("registration.promoted", {
+          eventId,
+          eventTitle,
+          studentId: promotedStudentId,
+          studentEmail: promotedStudent.get("email") as string,
+          studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
+          registrationId: promotedRegistrationId,
         });
-        if (promotedStudent && eventRecord) {
-          eventBus.publish("registration.promoted", {
-            eventId,
-            eventTitle: eventRecord.get("title") as string,
-            studentId: nextWaitlisted.studentId,
-            studentEmail: promotedStudent.get("email") as string,
-            studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
-            registrationId: nextWaitlisted.id,
-          });
-        }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 404) {
+      res.status(404).json({ message: "Registration not found." });
+      return;
+    }
     console.error("Cancel Registration Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
