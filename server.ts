@@ -11,6 +11,7 @@ import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
 import "./src/models/NotificationJob.model.js";
 import "./src/workers/notification-worker.js";
+import { startProcessor } from "./src/workers/notification-processor.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
@@ -50,6 +51,7 @@ sequelize
   .sync({ alter: true })
   .then(() => {
     console.log("PostgreSQL tables synced");
+    startProcessor();
     server.listen(PORT, () => {
       console.log("Server running on http://localhost:" + PORT);
     });
