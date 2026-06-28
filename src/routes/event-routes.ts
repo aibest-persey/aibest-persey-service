@@ -13,12 +13,12 @@ import {
   cancelRegistration,
   getParticipants,
 } from "../controllers/event-controller.js";
-import { verifyToken, requireOrganiser, requireStudent } from "../middleware/auth-middleware.js";
+import { verifyToken, requireOrganiser, requireStudent, requireStudentOrAdmin } from "../middleware/auth-middleware.js";
 
 const router: Router = express.Router();
 
 router.get("/", verifyToken, listEvents);
-router.get("/my-registrations", verifyToken, requireStudent, getMyRegistrations);
+router.get("/my-registrations", verifyToken, requireStudentOrAdmin, getMyRegistrations);
 router.get("/:id", verifyToken, getEvent);
 router.post("/", verifyToken, requireOrganiser, createEvent);
 router.put("/:id", verifyToken, requireOrganiser, updateEvent);

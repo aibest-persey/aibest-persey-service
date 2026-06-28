@@ -61,3 +61,11 @@ export const requireOrganiserOrAdmin = (req: Request, res: Response, next: NextF
   }
   next();
 };
+
+export const requireStudentOrAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.user?.role !== "student" && req.user?.role !== "admin") {
+    res.status(403).json({ message: "Forbidden: student or admin access required." });
+    return;
+  }
+  next();
+};
