@@ -7,9 +7,13 @@ import authRoutes from "./src/routes/auth-routes.js";
 import eventRoutes from "./src/routes/event-routes.js";
 import adminRoutes from "./src/routes/admin-routes.js";
 import organiserRoutes from "./src/routes/organiser-routes.js";
+import messageRoutes from "./src/routes/message-routes.js";
+import roleChangeRoutes from "./src/routes/rolechange-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
 import "./src/models/NotificationJob.model.js";
+import "./src/models/Message.model.js";
+import "./src/models/RoleChangeRequest.model.js";
 import "./src/workers/notification-worker.js";
 import { startProcessor } from "./src/workers/notification-processor.js";
 
@@ -27,6 +31,8 @@ server.use("/api/auth", authRoutes);
 server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
 server.use("/api/organisers", organiserRoutes);
+server.use("/api/messages", messageRoutes);
+server.use("/api/role-requests", roleChangeRoutes);
 
 server.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));

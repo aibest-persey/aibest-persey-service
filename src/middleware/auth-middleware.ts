@@ -53,3 +53,11 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
   }
   next();
 };
+
+export const requireOrganiserOrAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.user?.role !== "organiser" && req.user?.role !== "admin") {
+    res.status(403).json({ message: "Forbidden: organiser or admin access required." });
+    return;
+  }
+  next();
+};
