@@ -126,6 +126,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ message: "Internal server error." });
   }
 };
+
 // GET /api/events/:id — full event details
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -263,6 +264,7 @@ export const publishEvent = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ message: "Internal server error." });
   }
 };
+
 // PATCH /api/events/:id/unpublish — revert back to draft status
 export const unpublishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -321,10 +323,10 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
     });
 
     res.json(event);
-  } catch (error) {
-    console.error("Cancel Event Error:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
+  } catch (error) {console.error("Cancel Event Error:", error);
+                   res.status(500).json
+                     ({ message: "Internal server error." });
+                  }
 };
 
 // DELETE /api/events/:id — purge event records securely
@@ -564,7 +566,8 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
     });
 
     const participants = registrations.map(r => r.toJSON());
-    const registrationCount = registrations.filter(r => r.status === "registered").length;    const waitlistCount = registrations.filter(r => r.status === "waitlisted").length;
+    const registrationCount = registrations.filter(r => r.status === "registered").length;
+    const waitlistCount = registrations.filter(r => r.status === "waitlisted").length;
 
     res.json({
       registrationCount,
