@@ -29,3 +29,18 @@ Organisation.hasMany(OrganisationMember, { foreignKey: "organisationId", as: "me
 
 OrganisationMember.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(OrganisationMember, { foreignKey: "userId", as: "organisationMemberships" });
+
+import Club from "./Club.model.js";
+import ClubMember from "./ClubMember.model.js";
+
+Club.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
+Organisation.hasMany(Club, { foreignKey: "organisationId", as: "clubs" });
+
+Club.belongsTo(User, { foreignKey: "creatorId", as: "creator" });
+User.hasMany(Club, { foreignKey: "creatorId", as: "createdClubs" });
+
+ClubMember.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(ClubMember, { foreignKey: "clubId", as: "memberships" });
+
+ClubMember.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(ClubMember, { foreignKey: "userId", as: "clubMemberships" });

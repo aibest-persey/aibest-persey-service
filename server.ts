@@ -8,6 +8,7 @@ import eventRoutes from "./src/routes/event-routes.js";
 import adminRoutes from "./src/routes/admin-routes.js";
 import organiserRoutes from "./src/routes/organiser-routes.js";
 import organisationRoutes from "./src/routes/organisation-routes.js";
+import clubRoutes from "./src/routes/club-routes.js";
 import messageRoutes from "./src/routes/message-routes.js";
 import roleChangeRoutes from "./src/routes/rolechange-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
@@ -33,6 +34,7 @@ server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
 server.use("/api/organisers", organiserRoutes);
 server.use("/api/organisations", organisationRoutes);
+server.use("/api/organisations/:organisationId/clubs", clubRoutes);
 server.use("/api/messages", messageRoutes);
 server.use("/api/role-requests", roleChangeRoutes);
 
