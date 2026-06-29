@@ -263,7 +263,6 @@ export const publishEvent = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ message: "Internal server error." });
   }
 };
-
 // PATCH /api/events/:id/unpublish — revert back to draft status
 export const unpublishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -435,6 +434,7 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ message: "Internal server error." });
   }
 };
+
 // DELETE /api/events/:id/register — cancel registration & trigger waitlist promotions
 export const cancelRegistration = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -564,8 +564,7 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
     });
 
     const participants = registrations.map(r => r.toJSON());
-    const registrationCount = registrations.filter(r => r.status === "registered").length;
-    const waitlistCount = registrations.filter(r => r.status === "waitlisted").length;
+    const registrationCount = registrations.filter(r => r.status === "registered").length;    const waitlistCount = registrations.filter(r => r.status === "waitlisted").length;
 
     res.json({
       registrationCount,
