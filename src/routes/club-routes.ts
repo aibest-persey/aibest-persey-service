@@ -8,6 +8,7 @@ import {
   joinClub,
   leaveClub,
   inviteMember,
+  updateMemberPermissions,
   acceptInvitation,
   declineInvitation,
 } from "../controllers/club-controller.js";
@@ -23,6 +24,7 @@ router.delete("/:clubId", verifyToken, deleteClub);
 router.post("/:clubId/join", verifyToken, joinClub);
 router.delete("/:clubId/join", verifyToken, leaveClub);
 router.post("/:clubId/invite", verifyToken, inviteMember);
+router.patch("/:clubId/members/:memberId/permissions", verifyToken, updateMemberPermissions);
 router.post("/:clubId/invitations/accept", verifyToken, acceptInvitation);
 router.post("/:clubId/invitations/decline", verifyToken, declineInvitation);
 

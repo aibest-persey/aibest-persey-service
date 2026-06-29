@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
+import sequelize from "../clients/postgres-client.js";
 import Organisation from "../models/Organisation.model.js";
 import OrganisationMember from "../models/OrganisationMember.model.js";
 import Club from "../models/Club.model.js";
@@ -20,6 +21,10 @@ interface InviteMemberBody {
   identifier: string;
 }
 
+interface UpdatePermissionsBody {
+  permissions: string[];
+}
+
 const isOrgMember = async (organisationId: string, userId: string): Promise<boolean> => {
   const membership = await OrganisationMember.findOne({
     where: { organisationId, userId, status: "active" },
@@ -30,6 +35,24 @@ const isOrgMember = async (organisationId: string, userId: string): Promise<bool
 const isClubOwner = async (clubId: string, userId: string): Promise<boolean> => {
   const club = await Club.findByPk(clubId);
   return club?.creatorId === userId;
+};
+
+const getUserMembership = async (clubId: string, userId: string): Promise<ClubMember | null> => {
+  return ClubMember.findOne({
+    where: { clubId, userId, status: "active" },
+  });
+};
+
+const canManageClub = async (clubId: string, userId: string): Promise<boolean> => {
+  if (await isClubOwner(clubId, userId)) return true;
+  const membership = await getUserMembership(clubId, userId);
+  return membership?.role === "member" && Array.isArray(membership.permissions) && membership.permissions.includes("manage_club");
+};
+
+const canManageMembersPermissions = async (clubId: string, userId: string): Promise<boolean> => {
+  if (await isClubOwner(clubId, userId)) return true;
+  const membership = await getUserMembership(clubId, userId);
+  return membership?.role === "member" && Array.isArray(membership.permissions) && membership.permissions.includes("manage_members");
 };
 
 export const createClub = async (req: Request, res: Response): Promise<void> => {
@@ -68,6 +91,7 @@ export const createClub = async (req: Request, res: Response): Promise<void> => 
       userId: req.user!.id,
       role: "owner",
       status: "active",
+      permissions: ["manage_club", "manage_members"],
     });
 
     res.status(201).json(club);
@@ -169,9 +193,11 @@ export const getClub = async (req: Request, res: Response): Promise<void> => {
       isMember: !!currentUserMembership,
       isOwner: club.creatorId === req.user!.id,
       memberCount: members.length,
+      currentUserPermissions: currentUserMembership?.permissions ?? [],
       members: members.map(m => ({
         id: m.id,
         role: m.role,
+        permissions: m.permissions,
         user: m.user,
       })),
     });
@@ -195,9 +221,9 @@ export const updateClub = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const isOwner = await isClubOwner(clubId, req.user!.id);
-    if (!isOwner) {
-      res.status(403).json({ message: "Only the club owner can update this club." });
+    const canManage = await canManageClub(clubId, req.user!.id);
+    if (!canManage) {
+      res.status(403).json({ message: "You do not have permission to manage this club." });
       return;
     }
 
@@ -235,9 +261,9 @@ export const deleteClub = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const isOwner = await isClubOwner(clubId, req.user!.id);
-    if (!isOwner) {
-      res.status(403).json({ message: "Only the club owner can delete this club." });
+    const canManage = await canManageClub(clubId, req.user!.id);
+    if (!canManage) {
+      res.status(403).json({ message: "You do not have permission to manage this club." });
       return;
     }
 
@@ -277,6 +303,7 @@ export const joinClub = async (req: Request, res: Response): Promise<void> => {
         userId: req.user!.id,
         role: "member",
         status: "active",
+        permissions: [],
       },
     });
 
@@ -346,9 +373,9 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const isOwner = await isClubOwner(clubId, req.user!.id);
-    if (!isOwner) {
-      res.status(403).json({ message: "Only the club owner can invite members." });
+    const canManageMembersForInvite = await canManageMembersPermissions(clubId, req.user!.id);
+    if (!canManageMembersForInvite) {
+      res.status(403).json({ message: "You do not have permission to manage club members." });
       return;
     }
 
@@ -376,6 +403,7 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
         userId: user.id,
         role: "member",
         status: "invited",
+        permissions: [],
       },
     });
 
@@ -398,6 +426,44 @@ export const inviteMember = async (req: Request, res: Response): Promise<void> =
     });
   } catch (error) {
     console.error("Invite Member Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const updateMemberPermissions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { organisationId, clubId, memberId } = req.params as { organisationId: string; clubId: string; memberId: string };
+    const { permissions } = req.body as UpdatePermissionsBody;
+
+    const club = await Club.findOne({ where: { id: clubId, organisationId } });
+    if (!club) {
+      res.status(404).json({ message: "Club not found." });
+      return;
+    }
+
+    const canManageMembersForUser = await canManageMembersPermissions(clubId, req.user!.id);
+    if (!canManageMembersForUser) {
+      res.status(403).json({ message: "You do not have permission to manage club members." });
+      return;
+    }
+
+    const membership = await ClubMember.findOne({ where: { id: memberId, clubId, status: "active" } });
+    if (!membership) {
+      res.status(404).json({ message: "Club member not found." });
+      return;
+    }
+
+    if (membership.role === "owner") {
+      res.status(400).json({ message: "Owner permissions cannot be changed." });
+      return;
+    }
+
+    membership.permissions = Array.isArray(permissions) ? permissions : [];
+    await membership.save();
+
+    res.json({ message: "Member permissions updated.", membership });
+  } catch (error) {
+    console.error("Update Member Permissions Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -463,7 +529,5 @@ export const declineInvitation = async (req: Request, res: Response): Promise<vo
     res.status(500).json({ message: "Internal server error." });
   }
 };
-
-const sequelize = require("../clients/postgres-client.js").default;
 
 export default {};

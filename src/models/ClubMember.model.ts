@@ -9,11 +9,12 @@ interface ClubMemberAttributes {
   userId: string;
   role: "owner" | "member";
   status: "active" | "invited";
+  permissions: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface ClubMemberCreationAttributes extends Optional<ClubMemberAttributes, "id" | "role" | "status"> {}
+interface ClubMemberCreationAttributes extends Optional<ClubMemberAttributes, "id" | "role" | "status" | "permissions"> {}
 
 class ClubMember extends Model<ClubMemberAttributes, ClubMemberCreationAttributes> implements ClubMemberAttributes {
   declare id: string;
@@ -21,6 +22,7 @@ class ClubMember extends Model<ClubMemberAttributes, ClubMemberCreationAttribute
   declare userId: string;
   declare role: "owner" | "member";
   declare status: "active" | "invited";
+  declare permissions: string[];
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
   declare club?: Club;
@@ -51,6 +53,11 @@ ClubMember.init(
       type: DataTypes.ENUM("active", "invited"),
       allowNull: false,
       defaultValue: "active",
+    },
+    permissions: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
     },
   },
   {
