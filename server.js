@@ -58,10 +58,10 @@ sequelize.query(`
 sequelize
   .sync({ alter: true })
   .then(() => {
-    console.log("🚀 PostgreSQL database tables synced successfully!");
+    console.log("PostgreSQL database tables synced successfully!");
     startProcessor();
     server.listen(PORT, () => {
-      console.log(`🚀 Server fully operational running on port http://localhost:${PORT}`);
+      console.log(`Server fully operational running on port http://localhost:${PORT}`);
     });
   })
-  .catch((err: Error) => console.error("❌ PostgreSQL database sync error:", err));
+  .catch((err: Error) => console.error("PostgreSQL database sync error:", err));
