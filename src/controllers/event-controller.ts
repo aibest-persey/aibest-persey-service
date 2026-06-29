@@ -59,7 +59,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// GET /api/events — list events based on user roles and filters
+// GET /api/events — students see published + cancelled; organisers see their own (all) + others' published/cancelled
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
@@ -75,9 +75,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
     if (status === "draft" && isOrganiser) {
       where = { organiserId: userId, status: "draft" };
     } else if (status === "published") {
-      where = isOrganiser 
-        ? { [Op.and]: [{ status: "published" }, { [Op.or]: [{ organiserId: userId }, { status: "published" }] }] }
-        : { status: "published" };
+      where = { status: "published" };
     } else if (status === "cancelled" && isOrganiser) {
       where = { organiserId: userId, status: "cancelled" };
     }
@@ -127,7 +125,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// GET /api/events/:id — full event details
+// GET /api/events/:id — full event detail
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
@@ -163,9 +161,9 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     const isWaitlisted = myRegistration?.status === "waitlisted";
     const waitlistPosition = myRegistration?.waitlistPosition ?? null;
 
-    let recentRegistrations = undefined;
+    let recentRegistrations = null;
     if (isOwner) {
-      const dbRecent = await Registration.findAll({
+      recentRegistrations = await Registration.findAll({
         where: { eventId: event.id, status: { [Op.in]: ["registered", "waitlisted"] } },
         order: [["createdAt", "DESC"]],
         limit: 5,
@@ -177,7 +175,6 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
           },
         ],
       });
-      recentRegistrations = dbRecent.map(r => r.toJSON());
     }
 
     res.json({
@@ -196,7 +193,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// PUT /api/events/:id — organiser updates their own draft event
+// PUT /api/events/:id — organiser only, update their own draft event
 export const updateEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
@@ -240,19 +237,29 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// PATCH /api/events/:id/publish — transition status from draft to published
+// PATCH /api/events/:id/publish — organiser only, publish a draft
 export const publishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const event = await Event.findByPk(id);
 
-    if (!event || event.organiserId !== req.user!.id) {
+    if (!event) {
       res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only publish your own events." });
       return;
     }
 
     if (event.status === "published") {
       res.status(400).json({ message: "Event is already published." });
+      return;
+    }
+
+    if (event.status === "cancelled") {
+      res.status(400).json({ message: "Cancelled events cannot be published." });
       return;
     }
 
@@ -265,14 +272,24 @@ export const publishEvent = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// PATCH /api/events/:id/unpublish — revert back to draft status
+// PATCH /api/events/:id/unpublish — organiser only, revert to draft
 export const unpublishEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const event = await Event.findByPk(id);
 
-    if (!event || event.organiserId !== req.user!.id) {
+    if (!event) {
       res.status(404).json({ message: "Event not found." });
+      return;
+    }
+
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only unpublish your own events." });
+      return;
+    }
+
+    if (event.status === "draft") {
+      res.status(400).json({ message: "Event is already a draft." });
       return;
     }
 
@@ -285,7 +302,7 @@ export const unpublishEvent = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// PATCH /api/events/:id/cancel — cancel event and alert outbox systems
+// PATCH /api/events/:id/cancel — organiser only, cancel a published or draft event
 export const cancelEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
@@ -297,7 +314,7 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
     }
 
     if (event.organiserId !== req.user!.id) {
-      res.status(403).json({ message: "Forbidden: Only the owner can cancel this event." });
+      res.status(403).json({ message: "You can only cancel your own events." });
       return;
     }
 
@@ -309,38 +326,42 @@ export const cancelEvent = async (req: Request, res: Response): Promise<void> =>
     await sequelize.transaction(async (t) => {
       event.status = "cancelled";
       await event.save({ transaction: t });
-
       await Registration.update(
         { status: "cancelled", waitlistPosition: null },
-        { where: { eventId: id, status: "waitlisted" }, transaction: t }
+        { where: { eventId: event.id, status: "waitlisted" }, transaction: t },
       );
     });
+
+    res.json(event);
 
     eventBus.publish("event.cancelled", {
       eventId: event.id,
       eventTitle: event.title,
       organiserId: event.organiserId,
     });
-
-    res.json(event);
-  } catch (error) {console.error("Cancel Event Error:", error);
-                   res.status(500).json
-                     ({ message: "Internal server error." });
-                  }
+  } catch (error) {
+    console.error("Cancel Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
 };
 
-// DELETE /api/events/:id — purge event records securely
+// DELETE /api/events/:id — organiser only, delete their own event
 export const deleteEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const event = await Event.findByPk(id);
 
-    if (!event || event.organiserId !== req.user!.id) {
+    if (!event) {
       res.status(404).json({ message: "Event not found." });
       return;
     }
 
-    await Registration.destroy({ where: { eventId: id } });
+    if (event.organiserId !== req.user!.id) {
+      res.status(403).json({ message: "You can only delete your own events." });
+      return;
+    }
+
+    await Registration.destroy({ where: { eventId: event.id } });
     await event.destroy();
     res.json({ message: "Event deleted successfully." });
   } catch (error) {
@@ -349,198 +370,207 @@ export const deleteEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// POST /api/events/:id/register — book a seat or queue on the waitlist
+// POST /api/events/:id/register — student only
 export const registerForEvent = async (req: Request, res: Response): Promise<void> => {
+  const eventId = (req.params as { id: string }).id;
+  const studentId = req.user!.id;
+
+  const eventCheck = await Event.findByPk(eventId);
+  if (!eventCheck || eventCheck.status === "draft") {
+    res.status(404).json({ message: "Event not found." });
+    return;
+  }
+  if (eventCheck.status === "cancelled") {
+    res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." });
+    return;
+  }
+
   try {
-    const { id: eventId } = req.params as { id: string };
-    const studentId = req.user!.id;
-
-    const event = await Event.findByPk(eventId);
-    if (!event || event.status === "draft") {
-      res.status(404).json({ message: "Event not found." });
-      return;
-    }
-
-    if (event.status === "cancelled") {
-      res.status(410).json({ message: "Cannot register for a cancelled event." });
-      return;
-    }
-
-    const existingReg = await Registration.findOne({
-      where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } }
-    });
-    if (existingReg) {
-      res.status(409).json({ message: "You are already registered or waitlisted for this event." });
-      return;
-    }
-
-    const student = await User.findByPk(studentId);
-    if (!student) {
-      res.status(404).json({ message: "Student account not found." });
-      return;
-    }
-
-    const result = await sequelize.transaction(async (t) => {
-      const regCount = await Registration.count({
-        where: { eventId, status: "registered" },
+    const registration = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        lock: t.LOCK.UPDATE,
         transaction: t,
-        lock: t.LOCK.UPDATE
       });
+
+      if (!event || event.status === "draft") throw Object.assign(new Error("not_found"), { code: 404 });
+      if (event.status === "cancelled") throw Object.assign(new Error("cancelled"), { code: 410 });
+
+      const existing = await Registration.findOne({
+        where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } },
+        transaction: t,
+      });
+      if (existing) throw Object.assign(new Error("conflict"), { code: 409 });
 
       let status: "registered" | "waitlisted" = "registered";
       let waitlistPosition: number | null = null;
 
-      if (event.maxCapacity !== null && regCount >= event.maxCapacity) {
-        status = "waitlisted";
-        const currentWaitlistCount = await Registration.count({
-          where: { eventId, status: "waitlisted" },
-          transaction: t
+      if (event.maxCapacity !== null) {
+        const confirmedCount = await Registration.count({
+          where: { eventId, status: "registered" },
+          transaction: t,
         });
-        waitlistPosition = currentWaitlistCount + 1;
+
+        if (confirmedCount >= event.maxCapacity) {
+          const lastWaitlisted = await Registration.findOne({
+            where: { eventId, status: "waitlisted" },
+            order: [["waitlistPosition", "DESC"]],
+            transaction: t,
+          });
+          status = "waitlisted";
+          waitlistPosition = (lastWaitlisted?.waitlistPosition ?? 0) + 1;
+        }
       }
 
-      const newReg = await Registration.create({
-        eventId,
-        studentId,
-        status,
-        waitlistPosition
-      }, { transaction: t });
-
-      return { newReg, status, waitlistPosition };
+      return Registration.create({ eventId, studentId, status, waitlistPosition }, { transaction: t });
     });
 
-    if (result.status === "registered") {
-      eventBus.publish("registration.confirmed", {
-        eventId,
-        eventTitle: event.title,
-        studentId,
-        studentEmail: student.email,
-        studentName: `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim() || student.username,
-        registrationId: result.newReg.id,
-      });
-    } else {
-      eventBus.publish("registration.waitlisted", {
-        eventId,
-        eventTitle: event.title,
-        studentId,
-        studentEmail: student.email,
-        studentName: `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim() || student.username,
-        registrationId: result.newReg.id,
-        waitlistPosition: result.waitlistPosition!,
-      });
-    }
+    res.status(201).json(registration);
 
-    res.status(201).json(result.newReg);
-  } catch (error) {
+    const [student, event] = await Promise.all([
+      User.findByPk(studentId, { attributes: ["id", "email", "firstName", "lastName"] }),
+      Event.findByPk(eventId, { attributes: ["id", "title"] }),
+    ]);
+    if (student && event) {
+      const studentName = `${student.get("firstName")} ${student.get("lastName")}`;
+      const studentEmail = student.get("email") as string;
+      const eventTitle = event.get("title") as string;
+
+      if (registration.status === "registered") {
+        eventBus.publish("registration.confirmed", {
+          eventId, eventTitle, studentId,
+          studentEmail, studentName,
+          registrationId: registration.id,
+        });
+      } else {
+        eventBus.publish("registration.waitlisted", {
+          eventId, eventTitle, studentId,
+          studentEmail, studentName,
+          registrationId: registration.id,
+          waitlistPosition: registration.waitlistPosition!,
+        });
+      }
+    }
+  } catch (error: any) {
+    if (error.code === 404) { res.status(404).json({ message: "Event not found." }); return; }
+    if (error.code === 410) { res.status(410).json({ message: "This event has been cancelled and is no longer accepting registrations." }); return; }
+    if (error.code === 409) { res.status(409).json({ message: "Already registered for this event." }); return; }
     console.error("Register For Event Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
-
-// DELETE /api/events/:id/register — cancel registration & trigger waitlist promotions
+// DELETE /api/events/:id/register — student cancels their own registration
 export const cancelRegistration = async (req: Request, res: Response): Promise<void> => {
+  const eventId = (req.params as { id: string }).id;
+  const studentId = req.user!.id;
+
+  let cancelledRegistrationId = "";
+  let eventTitle = "";
+  let promotedStudentId: string | null = null;
+  let promotedRegistrationId: string | null = null;
+
   try {
-    const { id: eventId } = req.params as { id: string };
-    const studentId = req.user!.id;
-
-    const event = await Event.findByPk(eventId);
-    if (!event) {
-      res.status(404).json({ message: "Event not found." });
-      return;
-    }
-
-    const registration = await Registration.findOne({
-      where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } }
-    });
-    if (!registration) {
-      res.status(404).json({ message: "No active registration found to cancel." });
-      return;
-    }
-
-    const student = await User.findByPk(studentId);
-    const studentName = student 
-      ? `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim() || student.username 
-      : "Unknown Student";
-
-    const oldStatus = registration.status;
-
     await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!event) throw Object.assign(new Error("event_not_found"), { code: 404 });
+
+      const registration = await Registration.findOne({
+        where: { eventId, studentId, status: { [Op.in]: ["registered", "waitlisted"] } },
+        transaction: t,
+      });
+      if (!registration) throw Object.assign(new Error("not_found"), { code: 404 });
+
+      const wasRegistered = registration.status === "registered";
       registration.status = "cancelled";
       registration.waitlistPosition = null;
       await registration.save({ transaction: t });
 
-      if (oldStatus === "registered") {
-        const nextInLine = await Registration.findOne({
+      cancelledRegistrationId = registration.id;
+      eventTitle = event.title;
+
+      if (wasRegistered && event.maxCapacity !== null && event.status === "published") {
+        const next = await Registration.findOne({
           where: { eventId, status: "waitlisted" },
-          order: [["createdAt", "ASC"]],
+          order: [["waitlistPosition", "ASC"]],
           transaction: t,
-          lock: t.LOCK.UPDATE
         });
-
-        if (nextInLine) {
-          nextInLine.status = "registered";
-          nextInLine.waitlistPosition = null;
-          await nextInLine.save({ transaction: t });
-
-          const promotedStudent = await User.findByPk(nextInLine.studentId, { transaction: t });
-          if (promotedStudent) {
-            eventBus.publish("registration.promoted", {
-              eventId,
-              eventTitle: event.title,
-              studentId: nextInLine.studentId,
-              studentEmail: promotedStudent.email,
-              studentName: `${promotedStudent.firstName ?? ""} ${promotedStudent.lastName ?? ""}`.trim() || promotedStudent.username,
-              registrationId: nextInLine.id,
-            });
-          }
-
-          const remainingWaitlist = await Registration.findAll({
-            where: { eventId, status: "waitlisted" },
-            order: [["createdAt", "ASC"]],
-            transaction: t
-          });
-
-          let currentPos = 1;
-          for (const rw of remainingWaitlist) {
-            rw.waitlistPosition = currentPos++;
-            await rw.save({ transaction: t });
-          }
-        }
-      } else if (oldStatus === "waitlisted") {
-        const trailingWaitlist = await Registration.findAll({
-          where: { eventId, status: "waitlisted" },
-          order: [["createdAt", "ASC"]],
-          transaction: t
-        });
-
-        let currentPos = 1;
-        for (const tw of trailingWaitlist) {
-          tw.waitlistPosition = currentPos++;
-          await tw.save({ transaction: t });
+        if (next) {
+          next.status = "registered";
+          next.waitlistPosition = null;
+          await next.save({ transaction: t });
+          promotedStudentId = next.studentId;
+          promotedRegistrationId = next.id;
         }
       }
     });
 
-    eventBus.publish("registration.cancelled", {
-      eventId,
-      eventTitle: event.title,
-      studentId,
-      studentEmail: student?.email ?? "",
-      studentName,
-      registrationId: registration.id,
-    });
+    res.json({ message: "Registration cancelled successfully." });
 
-    res.json({ message: "Registration successfully cancelled." });
-  } catch (error) {
+    const [cancellingStudent, promotedStudent] = await Promise.all([
+      User.findByPk(studentId, { attributes: ["id", "email", "firstName", "lastName"] }),
+      promotedStudentId
+        ? User.findByPk(promotedStudentId, { attributes: ["id", "email", "firstName", "lastName"] })
+        : Promise.resolve(null),
+    ]);
+
+    if (cancellingStudent) {
+      eventBus.publish("registration.cancelled", {
+        eventId,
+        eventTitle,
+        studentId,
+        studentEmail: cancellingStudent.get("email") as string,
+        studentName: `${cancellingStudent.get("firstName")} ${cancellingStudent.get("lastName")}`,
+        registrationId: cancelledRegistrationId,
+      });
+    }
+
+    if (promotedStudentId && promotedRegistrationId && promotedStudent) {
+      eventBus.publish("registration.promoted", {
+        eventId,
+        eventTitle: event.title,
+        studentId: promotedStudentId,
+        studentEmail: promotedStudent.get("email") as string,
+        studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
+        registrationId: promotedRegistrationId,
+      });
+    }
+  } catch (error: any) {
+    if (error.code === 404) {
+      res.status(404).json({ message: "Registration not found." });
+      return;
+    }
     console.error("Cancel Registration Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
 
-// GET /api/events/:id/participants — query participants & waitlist info
+// GET /api/events/my-registrations — student only, their own active registrations with event details
+export const getMyRegistrations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const registrations = await Registration.findAll({
+      where: {
+        studentId: req.user!.id,
+        status: { [Op.in]: ["registered", "waitlisted"] },
+      },
+      order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: Event,
+          as: "event",
+          attributes: ["id", "title", "location", "date", "status", "maxCapacity"],
+        },
+      ],
+    });
+    res.json(registrations);
+  } catch (error) {
+    console.error("Get My Registrations Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// GET /api/events/:id/participants — organiser only, lists participants + waitlist for their event
 export const getParticipants = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id: eventId } = req.params as { id: string };
+    const eventId = (req.params as { id: string }).id;
     const event = await Event.findByPk(eventId);
 
     if (!event) {
@@ -549,12 +579,15 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
     }
 
     if (event.organiserId !== req.user!.id) {
-      res.status(403).json({ message: "Forbidden: Only the owner can view participant sheets." });
+      res.status(403).json({ message: "You can only view participants for your own events." });
       return;
     }
 
     const registrations = await Registration.findAll({
-      where: { eventId, status: { [Op.in]: ["registered", "waitlisted"] } },
+      where: {
+        eventId,
+        status: { [Op.in]: ["registered", "waitlisted"] },
+      },
       order: [["createdAt", "ASC"]],
       include: [
         {
@@ -565,40 +598,16 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
       ],
     });
 
-    const participants = registrations.map(r => r.toJSON());
-    const registrationCount = registrations.filter(r => r.status === "registered").length;
-    const waitlistCount = registrations.filter(r => r.status === "waitlisted").length;
+    const participants = registrations.filter((r) => r.status === "registered");
+    const waitlist = registrations.filter((r) => r.status === "waitlisted");
 
     res.json({
-      registrationCount,
-      waitlistCount,
-      participants,
+      registrationCount: participants.length,
+      waitlistCount: waitlist.length,
+      participants: registrations.map((r) => r.toJSON()),
     });
   } catch (error) {
     console.error("Get Participants Error:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
-};
-
-// GET /api/events/my-registrations — fetch user's personal schedules
-export const getMyRegistrations = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const studentId = req.user!.id;
-    const registrations = await Registration.findAll({
-      where: { studentId, status: { [Op.in]: ["registered", "waitlisted"] } },
-      include: [
-        {
-          model: Event,
-          as: "event",
-          include: [{ model: User, as: "organiser", attributes: ["id", "username", "firstName", "lastName", "color"] }]
-        }
-      ],
-      order: [["createdAt", "DESC"]]
-    });
-
-    res.json(registrations);
-  } catch (error) {
-    console.error("Get My Registrations Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
