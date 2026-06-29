@@ -32,6 +32,7 @@ User.hasMany(OrganisationMember, { foreignKey: "userId", as: "organisationMember
 
 import Club from "./Club.model.js";
 import ClubMember from "./ClubMember.model.js";
+import ClubActivity from "./ClubActivity.model.js";
 
 Club.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
 Organisation.hasMany(Club, { foreignKey: "organisationId", as: "clubs" });
@@ -44,3 +45,9 @@ Club.hasMany(ClubMember, { foreignKey: "clubId", as: "memberships" });
 
 ClubMember.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(ClubMember, { foreignKey: "userId", as: "clubMemberships" });
+
+ClubActivity.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(ClubActivity, { foreignKey: "clubId", as: "activities" });
+
+ClubActivity.belongsTo(User, { foreignKey: "creatorId", as: "creator" });
+User.hasMany(ClubActivity, { foreignKey: "creatorId", as: "createdClubActivities" });
