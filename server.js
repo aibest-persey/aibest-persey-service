@@ -27,7 +27,6 @@ const PORT: number = parseInt(process.env.PORT || "3000", 10);
 
 server.use(express.json());
 
-// Main App Routes Mounted Cleanly
 server.use("/api/auth", authRoutes);
 server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
@@ -54,14 +53,13 @@ sequelize.query(`
   // ENUM type doesn't exist yet on first run — sync will create it with all values
 });
 
-// Sync database and start background processes cleanly
 sequelize
   .sync({ alter: true })
   .then(() => {
-    console.log("PostgreSQL database tables synced successfully!");
+    console.log("PostgreSQL tables synced");
     startProcessor();
     server.listen(PORT, () => {
-      console.log(`Server fully operational running on port http://localhost:${PORT}`);
+      console.log("Server running on http://localhost:" + PORT);
     });
   })
-  .catch((err: Error) => console.error("PostgreSQL database sync error:", err));
+  .catch((err: Error) => console.error("PostgreSQL sync error:", err));
