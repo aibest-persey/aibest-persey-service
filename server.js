@@ -39,6 +39,21 @@ server.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));
 });
 
+// Add 'admin' to the role ENUM before sync (Postgres won't add it via alter:true alone)
+sequelize.query(`
+  DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'enum_users_role' AND e.enumlabel = 'admin'
+    ) THEN
+      ALTER TYPE "enum_users_role" ADD VALUE 'admin';
+    END IF;
+  END $$;
+`).catch(() => {
+  // ENUM type doesn't exist yet on first run — sync will create it with all values
+});
+
 // Sync database and start background processes cleanly
 sequelize
   .sync({ alter: true })
