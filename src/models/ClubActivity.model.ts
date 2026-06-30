@@ -13,11 +13,12 @@ interface ClubActivityAttributes {
   startDate: Date;
   endDate: Date | null;
   status: "scheduled" | "completed" | "cancelled";
+  visibility: "public" | "private";
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface ClubActivityCreationAttributes extends Optional<ClubActivityAttributes, "id" | "description" | "location" | "endDate" | "status" | "activityType" | "attendanceScope"> {}
+interface ClubActivityCreationAttributes extends Optional<ClubActivityAttributes, "id" | "description" | "location" | "endDate" | "status" | "activityType" | "attendanceScope" | "visibility"> {}
 
 class ClubActivity extends Model<ClubActivityAttributes, ClubActivityCreationAttributes> implements ClubActivityAttributes {
   declare id: string;
@@ -31,6 +32,7 @@ class ClubActivity extends Model<ClubActivityAttributes, ClubActivityCreationAtt
   declare startDate: Date;
   declare endDate: Date | null;
   declare status: "scheduled" | "completed" | "cancelled";
+  declare visibility: "public" | "private";
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
 }
@@ -84,6 +86,11 @@ ClubActivity.init(
       type: DataTypes.ENUM("scheduled", "completed", "cancelled"),
       allowNull: false,
       defaultValue: "scheduled",
+    },
+    visibility: {
+      type: DataTypes.ENUM("public", "private"),
+      allowNull: false,
+      defaultValue: "public",
     },
   },
   {

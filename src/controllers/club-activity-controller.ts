@@ -12,6 +12,7 @@ interface CreateActivityBody {
   location?: string;
   startDate: string;
   endDate?: string;
+  visibility?: "public" | "private";
 }
 
 interface UpdateActivityBody {
@@ -23,6 +24,7 @@ interface UpdateActivityBody {
   startDate?: string;
   endDate?: string | null;
   status?: "scheduled" | "completed" | "cancelled";
+  visibility?: "public" | "private";
 }
 
 const getClubMember = async (clubId: string, userId: string) => {
@@ -81,7 +83,7 @@ export const getActivity = async (req: Request, res: Response): Promise<void> =>
 export const createActivity = async (req: Request, res: Response): Promise<void> => {
   try {
     const { clubId } = req.params as { clubId: string };
-    const { title, description, activityType, attendanceScope, location, startDate, endDate } = req.body as CreateActivityBody;
+    const { title, description, activityType, attendanceScope, visibility, location, startDate, endDate } = req.body as CreateActivityBody;
 
     if (!title || !startDate) {
       res.status(400).json({ message: "Title and startDate are required." });
@@ -120,6 +122,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       startDate: parsedStart,
       endDate: parsedEnd,
       status: "scheduled",
+      visibility: visibility ?? "public",
     });
 
     res.status(201).json(activity);
@@ -132,7 +135,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 export const updateActivity = async (req: Request, res: Response): Promise<void> => {
   try {
     const { clubId, activityId } = req.params as { clubId: string; activityId: string };
-    const { title, description, activityType, attendanceScope, location, startDate, endDate, status } = req.body as UpdateActivityBody;
+    const { title, description, activityType, attendanceScope, visibility, location, startDate, endDate, status } = req.body as UpdateActivityBody;
 
     const canManage = await canManageActivities(clubId, req.user!.id);
     if (!canManage) {
@@ -167,6 +170,7 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
       }
     }
     if (status !== undefined) activity.status = status;
+    if (visibility !== undefined) activity.visibility = visibility;
 
     await activity.save();
     res.json(activity);
