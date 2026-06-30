@@ -7,11 +7,12 @@ interface RegistrationAttributes {
   studentId: string;
   status: "registered" | "waitlisted" | "cancelled";
   waitlistPosition: number | null;
+  ticketCode: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface RegistrationCreationAttributes extends Optional<RegistrationAttributes, "id" | "status" | "waitlistPosition"> {}
+interface RegistrationCreationAttributes extends Optional<RegistrationAttributes, "id" | "status" | "waitlistPosition" | "ticketCode"> {}
 
 class Registration extends Model<RegistrationAttributes, RegistrationCreationAttributes> implements RegistrationAttributes {
   declare id: string;
@@ -19,6 +20,7 @@ class Registration extends Model<RegistrationAttributes, RegistrationCreationAtt
   declare studentId: string;
   declare status: "registered" | "waitlisted" | "cancelled";
   declare waitlistPosition: number | null;
+  declare ticketCode: string | null;
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
 }
@@ -47,6 +49,10 @@ Registration.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       defaultValue: null,
+    },
+    ticketCode: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
   },
   {

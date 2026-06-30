@@ -11,6 +11,7 @@ import {
   deleteEvent,
   registerForEvent,
   cancelRegistration,
+  getTicket,
   getParticipants,
 } from "../controllers/event-controller.js";
 import { verifyToken, requireOrganiser, requireStudent, requireStudentOrAdmin } from "../middleware/auth-middleware.js";
@@ -28,6 +29,7 @@ router.patch("/:id/cancel", verifyToken, requireOrganiser, cancelEvent);
 router.delete("/:id", verifyToken, requireOrganiser, deleteEvent);
 router.post("/:id/register", verifyToken, requireStudent, registerForEvent);
 router.delete("/:id/register", verifyToken, requireStudent, cancelRegistration);
+router.get("/:id/ticket", verifyToken, requireStudent, getTicket);
 router.get("/:id/participants", verifyToken, requireOrganiser, getParticipants);
 
 export default router;

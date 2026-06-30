@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
+import crypto from "crypto";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
@@ -498,7 +499,10 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
         }
       }
 
-      return Registration.create({ eventId, studentId, status, waitlistPosition }, { transaction: t });
+      const ticketCode = status === "registered"
+        ? crypto.randomBytes(16).toString("hex")
+        : null;
+      return Registration.create({ eventId, studentId, status, waitlistPosition, ticketCode }, { transaction: t });
     });
 
     res.status(201).json(registration);
@@ -580,6 +584,7 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
         if (next) {
           next.status = "registered";
           next.waitlistPosition = null;
+          next.ticketCode = crypto.randomBytes(16).toString("hex");
           await next.save({ transaction: t });
           promotedStudentId = next.studentId;
           promotedRegistrationId = next.id;
@@ -649,6 +654,36 @@ export const getMyRegistrations = async (req: Request, res: Response): Promise<v
     res.json(registrations);
   } catch (error) {
     console.error("Get My Registrations Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// GET /api/events/:id/ticket — student only, retrieve registration ticket details
+export const getTicket = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const eventId = (req.params as { id: string }).id;
+    const registration = await Registration.findOne({
+      where: {
+        eventId,
+        studentId: req.user!.id,
+        status: { [Op.in]: ["registered", "waitlisted"] },
+      },
+    });
+
+    if (!registration) {
+      res.status(404).json({ message: "Registration not found." });
+      return;
+    }
+
+    res.json({
+      registrationId: registration.id,
+      eventId: registration.eventId,
+      status: registration.status,
+      waitlistPosition: registration.waitlistPosition,
+      ticketCode: registration.ticketCode,
+    });
+  } catch (error) {
+    console.error("Get Ticket Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
