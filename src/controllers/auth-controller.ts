@@ -6,6 +6,7 @@ import requestIp from "request-ip";
 import crypto from "crypto";
 import User from "../models/User.model.js";
 import redis from "../clients/redis-client.js";
+import { sendVerificationEmail, sendResetPasswordEmail } from "../modules/email-service.js";
 
 interface RegisterBody {
   firstName?: string;
@@ -18,6 +19,15 @@ interface RegisterBody {
 interface LoginBody {
   identifier: string;
   password: string;
+}
+
+interface VerifyBody {
+  email: string;
+  code: string;
+}
+
+interface ForgotPasswordBody {
+  email: string;
 }
 
 interface ResetPasswordBody {
@@ -60,6 +70,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       "#3f51b5",
     ];
 
+    const verificationCode = crypto.randomInt(100000, 999999).toString();
+    const verificationHash = crypto.createHash("sha256").update(verificationCode).digest("hex");
+    const verificationExpires = Date.now() + 15 * 60 * 1000;
+
     const newUser = await User.create({
       role: "student",
       firstName: firstName || null,
@@ -68,9 +82,18 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       email,
       password: hashedPassword,
       authString,
+      emailVerified: false,
+      verificationCode: verificationHash,
+      verificationCodeExpires: verificationExpires,
       ip_encrypted: await bcrypt.hash(requestIp.getClientIp(req) || "unknown", 10),
       color: colorsArr[Math.floor(Math.random() * colorsArr.length)],
     });
+
+    try {
+      await sendVerificationEmail({ email, code: verificationCode });
+    } catch (err) {
+      console.warn("Verification email failed to send:", err);
+    }
 
     try {
       const publicUser = {
@@ -92,9 +115,77 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       console.warn("Failed to set user cache on register", e);
     }
 
-    res.status(201).json({ message: "User registered successfully." });
+    res.status(201).json({ message: "User registered successfully. Check your email for a verification code." });
   } catch (error) {
     console.error("Registration Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, code } = req.body as VerifyBody;
+
+    if (!email || !code) {
+      res.status(400).json({ message: "Email and verification code are required." });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      res.status(400).json({ message: "Invalid verification request." });
+      return;
+    }
+
+    if (user.emailVerified) {
+      res.status(400).json({ message: "Email already verified." });
+      return;
+    }
+
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    if (!user.verificationCode || user.verificationCode !== codeHash || !user.verificationCodeExpires || user.verificationCodeExpires < Date.now()) {
+      res.status(400).json({ message: "Invalid or expired verification code." });
+      return;
+    }
+
+    user.emailVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await user.save();
+
+    res.json({ message: "Email successfully verified." });
+  } catch (error) {
+    console.error("Email Verification Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body as ForgotPasswordBody;
+    if (!email) {
+      res.status(400).json({ message: "Email is required." });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+      user.resetPasswordExpires = Date.now() + 60 * 60 * 1000;
+      await user.save();
+
+      const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/reset-password?token=${resetToken}&id=${user.id}`;
+      try {
+        await sendResetPasswordEmail({ email: user.email, resetUrl });
+      } catch (err) {
+        console.warn("Password reset email failed:", err);
+      }
+    }
+
+    res.json({ message: "If the email exists, a password reset link has been sent." });
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -116,6 +207,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (!user) {
       res.status(400).json({ message: "Invalid credentials." });
+      return;
+    }
+
+    if (!user.emailVerified) {
+      res.status(403).json({ message: "Please verify your email before logging in." });
       return;
     }
 

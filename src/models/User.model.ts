@@ -16,13 +16,16 @@ interface UserAttributes {
   authString: string | null;
   ip_encrypted: string | null;
   color: string | null;
+  emailVerified: boolean;
+  verificationCode: string | null;
+  verificationCodeExpires: number | null;
   resetPasswordToken: string | null;
   resetPasswordExpires: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {}
+interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "verificationCode" | "verificationCodeExpires" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -35,6 +38,9 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare authString: string | null;
   declare ip_encrypted: string | null;
   declare color: string | null;
+  declare emailVerified: boolean;
+  declare verificationCode: string | null;
+  declare verificationCodeExpires: number | null;
   declare bio: string | null;
   declare organization: string | null;
   declare website: string | null;
@@ -105,6 +111,19 @@ User.init(
     },
     color: {
       type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    emailVerified: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    verificationCode: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    verificationCodeExpires: {
+      type: DataTypes.BIGINT,
       allowNull: true,
     },
     resetPasswordToken: {

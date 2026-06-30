@@ -2,9 +2,11 @@ import express, { Router } from "express";
 import rateLimit from "express-rate-limit";
 import {
   register,
+  verifyEmail,
   login,
-  me,
+  forgotPassword,
   resetPassword,
+  me,
 } from "../controllers/auth-controller.js";
 import { verifyToken } from "../middleware/auth-middleware.js";
 
@@ -23,7 +25,9 @@ const limiter = process.env.NODE_ENV === "test"
   : authLimiter;
 
 router.post("/register", limiter, register);
+router.post("/verify-email", limiter, verifyEmail);
 router.post("/login", limiter, login);
+router.post("/forgot-password", limiter, forgotPassword);
 router.post("/reset-password", limiter, resetPassword);
 router.get("/me", verifyToken, me);
 
