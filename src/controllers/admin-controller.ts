@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import User from "../models/User.model.js";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
+import Organisation from "../models/Organisation.model.js";
+import OrganisationMember from "../models/OrganisationMember.model.js";
 import sequelize from "../clients/postgres-client.js";
 
 // GET /api/admin/users — list all users
@@ -111,6 +113,40 @@ export const deleteAnyEvent = async (req: Request, res: Response): Promise<void>
     res.json({ message: "Event deleted." });
   } catch (error) {
     console.error("Admin Delete Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const verifyOrganisation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation) {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+    organisation.status = "verified";
+    await organisation.save();
+    res.json({ message: "Organisation verified.", organisation });
+  } catch (error) {
+    console.error("Admin Verify Organisation Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const deleteOrganisation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation) {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+    await OrganisationMember.destroy({ where: { organisationId: id } });
+    await organisation.destroy();
+    res.json({ message: "Organisation deleted." });
+  } catch (error) {
+    console.error("Admin Delete Organisation Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };

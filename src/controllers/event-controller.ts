@@ -3,6 +3,8 @@ import { Op } from "sequelize";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
+import Organisation from "../models/Organisation.model.js";
+import OrganisationMember from "../models/OrganisationMember.model.js";
 import sequelize from "../clients/postgres-client.js";
 import eventBus from "../events/event-bus.js";
 
@@ -12,6 +14,7 @@ interface CreateEventBody {
   location?: string;
   date: string;
   maxCapacity?: number;
+  organisationId?: string;
 }
 
 interface UpdateEventBody {
@@ -24,7 +27,7 @@ interface UpdateEventBody {
 // POST /api/events — organiser only, creates a draft
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, description, location, date, maxCapacity } = req.body as CreateEventBody;
+    const { title, description, location, date, maxCapacity, organisationId } = req.body as CreateEventBody;
 
     if (!title || !date) {
       res.status(400).json({ message: "title and date are required." });
@@ -42,6 +45,28 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    let organisationIdValue: string | null = null;
+    if (organisationId) {
+      const organisation = await Organisation.findByPk(organisationId);
+      if (!organisation) {
+        res.status(404).json({ message: "Organisation not found." });
+        return;
+      }
+      if (organisation.status !== "verified") {
+        res.status(400).json({ message: "Organisation must be verified before creating organisation events." });
+        return;
+      }
+
+      const membership = await OrganisationMember.findOne({
+        where: { organisationId, userId: req.user!.id },
+      });
+      if (!membership) {
+        res.status(403).json({ message: "You must be a member of the organisation to create organisation events." });
+        return;
+      }
+      organisationIdValue = organisationId;
+    }
+
     const event = await Event.create({
       title,
       description: description ?? null,
@@ -50,6 +75,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
       status: "draft",
       maxCapacity: maxCapacity ?? null,
       organiserId: req.user!.id,
+      organisationId: organisationIdValue,
     });
 
     res.status(201).json(event);
@@ -68,44 +94,57 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const isAdmin = req.user!.role === "admin";
     const userId = req.user!.id;
     const { upcoming, status } = req.query as { upcoming?: string; status?: string };
 
     const visibleStatuses = { [Op.in]: ["published", "cancelled"] as const };
 
-    // Base visibility:
-    //   students    → published + cancelled events only
-    //   organisers  → their own events (any status) + everyone else's published/cancelled
     let where: any = isOrganiser
       ? { [Op.or]: [{ organiserId: userId }, { status: visibleStatuses }] }
       : { status: visibleStatuses };
 
-    // Optional status filter narrows the base visibility
+    if (isAdmin) {
+      where = {};
+    }
+
     if (status === "draft" && isOrganiser) {
-      // Drafts are private — show only the caller's own drafts
       where = { organiserId: userId, status: "draft" };
     } else if (status === "published") {
-      // All roles can filter to published events
       where = { status: "published" };
     } else if (status === "cancelled" && isOrganiser) {
-      // Cancelled filter for organisers scopes to their own cancelled events
       where = { organiserId: userId, status: "cancelled" };
     }
 
-    // Narrow to future events when requested
     if (upcoming === "true") {
       where = { [Op.and]: [where, { date: { [Op.gte]: new Date() } }] };
     }
 
     const events = await Event.findAll({ where, order: [["date", "ASC"]] });
 
-    if (events.length === 0) {
+    const orgIds = Array.from(new Set(
+      events
+        .map((e) => e.organisationId)
+        .filter((o): o is string => Boolean(o)),
+    ));
+    const orgMemberships = orgIds.length > 0
+      ? await OrganisationMember.findAll({ where: { userId, organisationId: { [Op.in]: orgIds } } })
+      : [];
+    const memberOrgIds = new Set(orgMemberships.map((m) => m.organisationId));
+
+    const visibleEvents = events.filter((event) => {
+      if (!event.organisationId) return true;
+      if (isAdmin) return true;
+      if (event.organiserId === userId) return true;
+      return memberOrgIds.has(event.organisationId);
+    });
+
+    if (visibleEvents.length === 0) {
       res.json([]);
       return;
     }
 
-    // Fetch all active registrations for these events in a single query
-    const eventIds = events.map(e => e.id);
+    const eventIds = visibleEvents.map((e) => e.id);
     const registrations = await Registration.findAll({
       where: {
         eventId: { [Op.in]: eventIds },
@@ -113,7 +152,6 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
       },
     });
 
-    // Build per-event maps: confirmed seat count + current user's registration status
     const countMap: Record<string, number> = {};
     const userStatusMap: Record<string, string> = {};
     for (const r of registrations) {
@@ -125,7 +163,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
       }
     }
 
-    const result = events.map(e => ({
+    const result = visibleEvents.map((e) => ({
       ...e.toJSON(),
       registrationCount: countMap[e.id] ?? 0,
       isRegistered: userStatusMap[e.id] === "registered",
@@ -146,6 +184,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const isAdmin = req.user!.role === "admin";
     const userId = req.user!.id;
     const { id } = req.params as { id: string };
 
@@ -156,13 +195,20 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Students can only see published or cancelled events
-    if (!isOrganiser && event.status === "draft") {
+    const orgMembership = event.organisationId
+      ? await OrganisationMember.findOne({ where: { organisationId: event.organisationId, userId } })
+      : null;
+
+    const isOwner = event.organiserId === userId;
+    if (event.organisationId && !isOwner && !isAdmin && !orgMembership) {
       res.status(404).json({ message: "Event not found." });
       return;
     }
 
-    const isOwner = event.organiserId === userId;
+    if (!isOrganiser && event.status === "draft") {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
 
     // Fetch organiser's public profile to display "Organised by"
     const organiser = await User.findByPk(event.organiserId, {
