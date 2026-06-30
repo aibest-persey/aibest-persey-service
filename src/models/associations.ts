@@ -5,6 +5,9 @@ import Message from "./Message.model.js";
 import RoleChangeRequest from "./RoleChangeRequest.model.js";
 import Organisation from "./Organisation.model.js";
 import OrganisationMember from "./OrganisationMember.model.js";
+import Club from "./Club.model.js";
+import ClubMember from "./ClubMember.model.js";
+import News from "./News.model.js";
 
 Registration.belongsTo(User, { foreignKey: "studentId", as: "student" });
 Registration.belongsTo(Event, { foreignKey: "eventId", as: "event" });
@@ -29,3 +32,20 @@ OrganisationMember.belongsTo(User, { foreignKey: "userId", as: "user" });
 OrganisationMember.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
 Organisation.hasMany(OrganisationMember, { foreignKey: "organisationId", as: "members" });
 User.hasMany(OrganisationMember, { foreignKey: "userId", as: "organisationMemberships" });
+
+Club.belongsTo(User, { foreignKey: "createdBy", as: "creator" });
+User.hasMany(Club, { foreignKey: "createdBy", as: "createdClubs" });
+Club.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
+Organisation.hasMany(Club, { foreignKey: "organisationId", as: "clubs" });
+
+ClubMember.belongsTo(User, { foreignKey: "userId", as: "user" });
+ClubMember.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(ClubMember, { foreignKey: "clubId", as: "members" });
+User.hasMany(ClubMember, { foreignKey: "userId", as: "clubMemberships" });
+
+News.belongsTo(User, { foreignKey: "createdBy", as: "author" });
+User.hasMany(News, { foreignKey: "createdBy", as: "news" });
+News.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
+Organisation.hasMany(News, { foreignKey: "organisationId", as: "news" });
+News.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(News, { foreignKey: "clubId", as: "news" });

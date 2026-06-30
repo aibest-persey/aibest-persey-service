@@ -9,6 +9,7 @@ import adminRoutes from "./src/routes/admin-routes.js";
 import organiserRoutes from "./src/routes/organiser-routes.js";
 import organisationRoutes from "./src/routes/organisation-routes.js";
 import messageRoutes from "./src/routes/message-routes.js";
+import newsRoutes from "./src/routes/news-routes.js";
 import roleChangeRoutes from "./src/routes/rolechange-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
@@ -33,6 +34,7 @@ server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
 server.use("/api/organisers", organiserRoutes);
 server.use("/api/organisations", organisationRoutes);
+server.use("/api/news", newsRoutes);
 server.use("/api/messages", messageRoutes);
 server.use("/api/role-requests", roleChangeRoutes);
 
