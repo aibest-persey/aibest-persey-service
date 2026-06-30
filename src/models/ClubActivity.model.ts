@@ -8,6 +8,7 @@ interface ClubActivityAttributes {
   title: string;
   description: string | null;
   activityType: "meeting" | "event" | "task" | "other";
+  attendanceScope: "public" | "club_members_only";
   location: string | null;
   startDate: Date;
   endDate: Date | null;
@@ -16,7 +17,7 @@ interface ClubActivityAttributes {
   updatedAt?: Date;
 }
 
-interface ClubActivityCreationAttributes extends Optional<ClubActivityAttributes, "id" | "description" | "location" | "endDate" | "status" | "activityType"> {}
+interface ClubActivityCreationAttributes extends Optional<ClubActivityAttributes, "id" | "description" | "location" | "endDate" | "status" | "activityType" | "attendanceScope"> {}
 
 class ClubActivity extends Model<ClubActivityAttributes, ClubActivityCreationAttributes> implements ClubActivityAttributes {
   declare id: string;
@@ -25,6 +26,7 @@ class ClubActivity extends Model<ClubActivityAttributes, ClubActivityCreationAtt
   declare title: string;
   declare description: string | null;
   declare activityType: "meeting" | "event" | "task" | "other";
+  declare attendanceScope: "public" | "club_members_only";
   declare location: string | null;
   declare startDate: Date;
   declare endDate: Date | null;
@@ -60,6 +62,11 @@ ClubActivity.init(
       type: DataTypes.ENUM("meeting", "event", "task", "other"),
       allowNull: false,
       defaultValue: "meeting",
+    },
+    attendanceScope: {
+      type: DataTypes.ENUM("public", "club_members_only"),
+      allowNull: false,
+      defaultValue: "public",
     },
     location: {
       type: DataTypes.STRING(255),

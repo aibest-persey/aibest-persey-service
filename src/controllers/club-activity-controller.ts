@@ -8,6 +8,7 @@ interface CreateActivityBody {
   title: string;
   description?: string;
   activityType?: "meeting" | "event" | "task" | "other";
+  attendanceScope?: "public" | "club_members_only";
   location?: string;
   startDate: string;
   endDate?: string;
@@ -17,6 +18,7 @@ interface UpdateActivityBody {
   title?: string;
   description?: string | null;
   activityType?: "meeting" | "event" | "task" | "other";
+  attendanceScope?: "public" | "club_members_only";
   location?: string | null;
   startDate?: string;
   endDate?: string | null;
@@ -79,7 +81,7 @@ export const getActivity = async (req: Request, res: Response): Promise<void> =>
 export const createActivity = async (req: Request, res: Response): Promise<void> => {
   try {
     const { clubId } = req.params as { clubId: string };
-    const { title, description, activityType, location, startDate, endDate } = req.body as CreateActivityBody;
+    const { title, description, activityType, attendanceScope, location, startDate, endDate } = req.body as CreateActivityBody;
 
     if (!title || !startDate) {
       res.status(400).json({ message: "Title and startDate are required." });
@@ -113,6 +115,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
       title,
       description: description ?? null,
       activityType: activityType ?? "meeting",
+      attendanceScope: attendanceScope ?? "public",
       location: location ?? null,
       startDate: parsedStart,
       endDate: parsedEnd,
@@ -129,7 +132,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
 export const updateActivity = async (req: Request, res: Response): Promise<void> => {
   try {
     const { clubId, activityId } = req.params as { clubId: string; activityId: string };
-    const { title, description, activityType, location, startDate, endDate, status } = req.body as UpdateActivityBody;
+    const { title, description, activityType, attendanceScope, location, startDate, endDate, status } = req.body as UpdateActivityBody;
 
     const canManage = await canManageActivities(clubId, req.user!.id);
     if (!canManage) {
@@ -146,6 +149,7 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
     if (title !== undefined) activity.title = title;
     if (description !== undefined) activity.description = description;
     if (activityType !== undefined) activity.activityType = activityType;
+    if (attendanceScope !== undefined) activity.attendanceScope = attendanceScope;
     if (location !== undefined) activity.location = location;
     if (startDate !== undefined) {
       const parsed = new Date(startDate);
