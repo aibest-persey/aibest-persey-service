@@ -28,6 +28,32 @@ export const listClubs = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// GET /api/clubs/:id — single club, with the caller's own membership role
+export const getClub = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+
+    const club = await Club.findByPk(id);
+    if (!club) {
+      res.status(404).json({ message: "Club not found." });
+      return;
+    }
+
+    const membership = await ClubMember.findOne({ where: { clubId: id, userId: req.user!.id } });
+    const memberCount = await ClubMember.count({ where: { clubId: id } });
+
+    res.json({
+      ...club.toJSON(),
+      isMember: Boolean(membership),
+      memberCount,
+      myRole: membership?.role ?? null,
+    });
+  } catch (error) {
+    console.error("Get Club Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 // POST /api/clubs/:id/join — self-service; if the club belongs to an
 // organisation, the requester must already be a member of that organisation
 export const joinClub = async (req: Request, res: Response): Promise<void> => {
@@ -57,7 +83,8 @@ export const joinClub = async (req: Request, res: Response): Promise<void> => {
     }
 
     const member = await ClubMember.create({ clubId: id, userId: req.user!.id, role: "member" });
-    res.status(201).json({ message: "Joined club.", member });
+    const memberCount = await ClubMember.count({ where: { clubId: id } });
+    res.status(201).json({ message: "Joined club.", member, memberCount });
   } catch (error) {
     console.error("Join Club Error:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -81,7 +108,8 @@ export const leaveClub = async (req: Request, res: Response): Promise<void> => {
     }
 
     await membership.destroy();
-    res.json({ message: "Left club." });
+    const memberCount = await ClubMember.count({ where: { clubId: id } });
+    res.json({ message: "Left club.", memberCount });
   } catch (error) {
     console.error("Leave Club Error:", error);
     res.status(500).json({ message: "Internal server error." });

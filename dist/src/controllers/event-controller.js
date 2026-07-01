@@ -5,6 +5,7 @@ import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
 import Organisation from "../models/Organisation.model.js";
 import OrganisationMember from "../models/OrganisationMember.model.js";
+import Club from "../models/Club.model.js";
 import ClubMember from "../models/ClubMember.model.js";
 import sequelize from "../clients/postgres-client.js";
 import eventBus from "../events/event-bus.js";
@@ -31,6 +32,7 @@ const buildEventResponse = (event) => ({
     visibility: event.visibility ?? "public",
     ownerScope: event.ownerScope ?? "public",
     coverImage: event.coverImage ?? null,
+    clubId: event.clubId ?? null,
 });
 const parseCreateEventPayload = async (req, body) => {
     const context = await getEventFormContext(req.user.id, req.user.role);
@@ -75,6 +77,27 @@ export const createEvent = async (req, res) => {
             }
             organisationIdValue = organisationId;
         }
+        const clubId = req.body.clubId;
+        let clubIdValue = null;
+        if (ownerScope === "club") {
+            if (!clubId) {
+                res.status(400).json({ message: "clubId is required for club-scoped events." });
+                return;
+            }
+            const club = await Club.findByPk(clubId);
+            if (!club) {
+                res.status(404).json({ message: "Club not found." });
+                return;
+            }
+            const membership = await ClubMember.findOne({
+                where: { clubId, userId: req.user.id },
+            });
+            if (!membership || (membership.role !== "owner" && membership.role !== "manager")) {
+                res.status(403).json({ message: "Only club owners/managers can create club events." });
+                return;
+            }
+            clubIdValue = clubId;
+        }
         const event = await Event.create({
             title,
             description,
@@ -90,6 +113,7 @@ export const createEvent = async (req, res) => {
             maxCapacity: capacity ?? null,
             organiserId: req.user.id,
             organisationId: organisationIdValue,
+            clubId: clubIdValue,
         });
         res.status(201).json(buildEventResponse(event));
     }
@@ -119,7 +143,7 @@ export const listEvents = async (req, res) => {
         const isOrganiser = req.user.role === "organiser";
         const isAdmin = req.user.role === "admin";
         const userId = req.user.id;
-        const { upcoming, status } = req.query;
+        const { upcoming, status, clubId } = req.query;
         const visibleStatuses = { [Op.in]: ["published", "cancelled"] };
         let where = isOrganiser
             ? { [Op.or]: [{ organiserId: userId }, { status: visibleStatuses }] }
@@ -139,6 +163,9 @@ export const listEvents = async (req, res) => {
         if (upcoming === "true") {
             where = { [Op.and]: [where, { date: { [Op.gte]: new Date() } }] };
         }
+        if (clubId) {
+            where = { [Op.and]: [where, { clubId }] };
+        }
         const events = await Event.findAll({ where, order: [["date", "ASC"]] });
         const orgIds = Array.from(new Set(events
             .map((e) => e.organisationId)
@@ -147,14 +174,23 @@ export const listEvents = async (req, res) => {
             ? await OrganisationMember.findAll({ where: { userId, organisationId: { [Op.in]: orgIds } } })
             : [];
         const memberOrgIds = new Set(orgMemberships.map((m) => m.organisationId));
+        const clubIds = Array.from(new Set(events
+            .map((e) => e.clubId)
+            .filter((c) => Boolean(c))));
+        const clubMemberships = clubIds.length > 0
+            ? await ClubMember.findAll({ where: { userId, clubId: { [Op.in]: clubIds } } })
+            : [];
+        const memberClubIds = new Set(clubMemberships.map((m) => m.clubId));
         const visibleEvents = events.filter((event) => {
-            if (!event.organisationId)
-                return true;
             if (isAdmin)
                 return true;
             if (event.organiserId === userId)
                 return true;
-            return memberOrgIds.has(event.organisationId);
+            if (event.clubId)
+                return memberClubIds.has(event.clubId);
+            if (event.organisationId)
+                return memberOrgIds.has(event.organisationId);
+            return true;
         });
         if (visibleEvents.length === 0) {
             res.json([]);
@@ -208,8 +244,15 @@ export const getEvent = async (req, res) => {
         const orgMembership = event.organisationId
             ? await OrganisationMember.findOne({ where: { organisationId: event.organisationId, userId } })
             : null;
+        const clubMembership = event.clubId
+            ? await ClubMember.findOne({ where: { clubId: event.clubId, userId } })
+            : null;
         const isOwner = event.organiserId === userId;
         if (event.organisationId && !isOwner && !isAdmin && !orgMembership) {
+            res.status(404).json({ message: "Event not found." });
+            return;
+        }
+        if (event.clubId && !isOwner && !isAdmin && !clubMembership) {
             res.status(404).json({ message: "Event not found." });
             return;
         }
@@ -313,6 +356,29 @@ export const updateEvent = async (req, res) => {
         }
         else if (req.body && req.body.organisationId === undefined) {
             event.organisationId = null;
+        }
+        const clubId = req.body.clubId;
+        if (ownerScope === "club") {
+            if (!clubId) {
+                res.status(400).json({ message: "clubId is required for club-scoped events." });
+                return;
+            }
+            const club = await Club.findByPk(clubId);
+            if (!club) {
+                res.status(404).json({ message: "Club not found." });
+                return;
+            }
+            const membership = await ClubMember.findOne({
+                where: { clubId, userId: req.user.id },
+            });
+            if (!membership || (membership.role !== "owner" && membership.role !== "manager")) {
+                res.status(403).json({ message: "Only club owners/managers can create club events." });
+                return;
+            }
+            event.clubId = clubId;
+        }
+        else if (req.body && req.body.clubId === undefined) {
+            event.clubId = null;
         }
         event.title = title;
         event.description = description;

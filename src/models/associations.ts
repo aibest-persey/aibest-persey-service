@@ -10,6 +10,7 @@ import ClubMember from "./ClubMember.model.js";
 import News from "./News.model.js";
 import OrganisationJoinRequest from "./OrganisationJoinRequest.model.js";
 import OAuthAccount from "./OAuthAccount.model.js";
+import Post from "./Post.model.js";
 
 Registration.belongsTo(User, { foreignKey: "studentId", as: "student" });
 Registration.belongsTo(Event, { foreignKey: "eventId", as: "event" });
@@ -60,3 +61,11 @@ User.hasMany(OrganisationJoinRequest, { foreignKey: "studentId", as: "organisati
 
 OAuthAccount.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(OAuthAccount, { foreignKey: "userId", as: "oauthAccounts" });
+
+Post.belongsTo(User, { foreignKey: "authorId", as: "author" });
+User.hasMany(Post, { foreignKey: "authorId", as: "posts" });
+Post.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(Post, { foreignKey: "clubId", as: "posts" });
+
+Event.belongsTo(Club, { foreignKey: "clubId", as: "club" });
+Club.hasMany(Event, { foreignKey: "clubId", as: "events" });

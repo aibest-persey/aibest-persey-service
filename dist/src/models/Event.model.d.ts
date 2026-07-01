@@ -15,10 +15,11 @@ interface EventAttributes {
     maxCapacity: number | null;
     organiserId: string;
     organisationId: string | null;
+    clubId: string | null;
     createdAt?: Date;
     updatedAt?: Date;
 }
-interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId" | "startAt" | "endAt" | "coverImage" | "visibility" | "ownerScope"> {
+interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId" | "clubId" | "startAt" | "endAt" | "coverImage" | "visibility" | "ownerScope"> {
 }
 declare class Event extends Model<EventAttributes, EventCreationAttributes> implements EventAttributes {
     id: string;
@@ -36,6 +37,7 @@ declare class Event extends Model<EventAttributes, EventCreationAttributes> impl
     maxCapacity: number | null;
     organiserId: string;
     organisationId: string | null;
+    clubId: string | null;
     readonly createdAt?: Date;
     readonly updatedAt?: Date;
 }

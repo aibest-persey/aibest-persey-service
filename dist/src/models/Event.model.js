@@ -71,6 +71,10 @@ Event.init({
         type: DataTypes.UUID,
         allowNull: true,
     },
+    clubId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+    },
 }, {
     tableName: "events",
     timestamps: true,

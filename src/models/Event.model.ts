@@ -17,11 +17,12 @@ interface EventAttributes {
   maxCapacity: number | null;
   organiserId: string;
   organisationId: string | null;
+  clubId: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId" | "startAt" | "endAt" | "coverImage" | "visibility" | "ownerScope"> {}
+interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId" | "clubId" | "startAt" | "endAt" | "coverImage" | "visibility" | "ownerScope"> {}
 
 class Event extends Model<EventAttributes, EventCreationAttributes> implements EventAttributes {
   declare id: string;
@@ -39,6 +40,7 @@ class Event extends Model<EventAttributes, EventCreationAttributes> implements E
   declare maxCapacity: number | null;
   declare organiserId: string;
   declare organisationId: string | null;
+  declare clubId: string | null;
   declare readonly createdAt?: Date;
   declare readonly updatedAt?: Date;
 }
@@ -110,6 +112,10 @@ Event.init(
       allowNull: false,
     },
     organisationId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    clubId: {
       type: DataTypes.UUID,
       allowNull: true,
     },
