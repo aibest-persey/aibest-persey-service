@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Schedule</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --border: #dfe4ee;
+        --text: #1f2a44;
+        --muted: #6b748a;
+        --accent: #2563eb;
+        --accent-soft: #dbeafe;
+        --event: #f59e0b;
+        --event-soft: #fef3c7;
+        --class: #16a34a;
+        --class-soft: #dcfce7;
+      }
+      body { margin:0; background:var(--bg); color:var(--text); }
+      .page { max-width: 920px; margin: 0 auto; padding: 24px; }
+      .card { background:var(--card); border:1px solid var(--border); border-radius: 20px; box-shadow: 0 16px 32px rgba(31,42,68,.06); }
+      .header { padding: 20px 24px 8px; }
+      .header h1 { margin: 0 0 8px; font-size: 24px; }
+      .header p { margin: 0; color: var(--muted); }
+      .content { display:grid; gap: 20px; padding:20px 24px 24px; }
+      .calendar { padding: 16px; }
+      .calendar-grid { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap:8px; margin-top: 12px; }
+      .day-label { text-align:center; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; }
+      .day-cell { border:1px solid var(--border); border-radius:14px; padding:10px 0; min-height:54px; text-align:center; cursor:pointer; background:#fff; }
+      .day-cell.muted { opacity:.45; }
+      .day-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+      .day-cell.selected { background: var(--accent-soft); color: var(--accent); font-weight:700; }
+      .agenda { padding: 16px; }
+      .agenda-list { display:grid; gap:12px; margin-top: 12px; }
+      .agenda-item { display:flex; justify-content:space-between; gap:16px; padding:14px 16px; border-radius:16px; border:1px solid var(--border); text-decoration:none; color:inherit; }
+      .agenda-item.class { background: var(--class-soft); border-color:#86efac; }
+      .agenda-item.event { background: var(--event-soft); border-color:#fcd34d; }
+      .meta { color:var(--muted); font-size:13px; margin-top:6px; }
+      .pill { display:inline-flex; align-items:center; border-radius:999px; padding:4px 8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+      .pill.class { background:#dcfce7; color:#166534; }
+      .pill.event { background:#fef3c7; color:#92400e; }
+      .ticket { font-weight:700; color:#b45309; margin-top:6px; }
+      .empty { padding: 16px; color: var(--muted); }
+      @media (max-width: 720px) { .content { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="card">
+        <div class="header">
+          <h1>Schedule</h1>
+          <p>Pick a day to see the classes and events that belong to it.</p>
+        </div>
+        <div class="content">
+          <div class="calendar card">
+            <div id="calendarHeading">Loading calendar…</div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </div>
+          <div class="agenda card">
+            <div id="agendaHeading">Loading agenda…</div>
+            <div class="agenda-list" id="agendaList"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const state = { selectedDate: null, items: [] };
+      const calendarHeading = document.getElementById('calendarHeading');
+      const calendarGrid = document.getElementById('calendarGrid');
+      const agendaHeading = document.getElementById('agendaHeading');
+      const agendaList = document.getElementById('agendaList');
+
+      const toDateInputValue = (date) => {
+        const year = date.getFullYear();
+        const month = `${date.getMonth() + 1}`.padStart(2, '0');
+        const day = `${date.getDate()}`.padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      async function loadSchedule(date) {
+        const queryDate = date ? toDateInputValue(date) : toDateInputValue(new Date());
+        const res = await fetch(`/api/schedule?date=${encodeURIComponent(queryDate)}`);
+        const data = await res.json();
+        state.selectedDate = new Date(data.selectedDate);
+        state.items = data.items;
+        render(data);
+      }
+
+      function render(data) {
+        const selected = new Date(data.selectedDate);
+        const today = new Date(data.today);
+        const monthLabel = selected.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        calendarHeading.textContent = monthLabel;
+        calendarGrid.innerHTML = '';
+
+        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        dayLabels.forEach((label) => {
+          const el = document.createElement('div');
+          el.className = 'day-label';
+          el.textContent = label;
+          calendarGrid.appendChild(el);
+        });
+
+        data.days.forEach((day) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = ['day-cell', day.isCurrentMonth ? '' : 'muted', day.isToday ? 'today' : '', day.isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+          button.textContent = day.dayNumber;
+          button.addEventListener('click', () => loadSchedule(new Date(day.date)));
+          calendarGrid.appendChild(button);
+        });
+
+        const selectedDateLabel = selected.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+        agendaHeading.textContent = `Agenda for ${selectedDateLabel}`;
+        if (!state.items.length) {
+          agendaList.innerHTML = '<div class="empty">No items for this day.</div>';
+          return;
+        }
+
+        agendaList.innerHTML = '';
+        state.items.forEach((item) => {
+          const a = document.createElement('a');
+          a.href = item.detailUrl;
+          a.className = `agenda-item ${item.kind}`;
+          a.innerHTML = `
+            <div>
+              <div class="pill ${item.kind}">${item.kind === 'event' ? 'Event' : 'Class'}</div>
+              <h3>${item.title}</h3>
+              <div class="meta">${item.timeRange}</div>
+              <div class="meta">${item.ownerName || 'Owner unavailable'}</div>
+              ${item.ticketCode ? `<div class="ticket">${item.ticketCode}</div>` : ''}
+            </div>
+            <div>${item.timeRange}</div>
+          `;
+          agendaList.appendChild(a);
+        });
+      }
+
+      loadSchedule(new Date());
+    </script>
+  </body>
+</html>
