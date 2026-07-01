@@ -6,48 +6,97 @@ import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
 import Organisation from "../models/Organisation.model.js";
 import OrganisationMember from "../models/OrganisationMember.model.js";
+import ClubMember from "../models/ClubMember.model.js";
 import sequelize from "../clients/postgres-client.js";
 import eventBus from "../events/event-bus.js";
+import { getAllowedEventFormOptions, validateEventFormPayload } from "../events/event-form-utils.js";
 
 interface CreateEventBody {
-  title: string;
-  description?: string;
-  location?: string;
-  date: string;
-  maxCapacity?: number;
-  organisationId?: string;
-}
-
-interface UpdateEventBody {
   title?: string;
   description?: string;
   location?: string;
+  coverImage?: string;
+  startAt?: string;
+  endAt?: string;
   date?: string;
+  start?: string;
+  end?: string;
+  capacity?: number;
+  maxCapacity?: number;
+  visibility?: string;
+  ownerScope?: string;
+  organisationId?: string;
+  scope?: string;
 }
+
+interface UpdateEventBody extends CreateEventBody {}
+
+const getEventFormContext = async (userId: string, role: "student" | "organiser" | "admin") => {
+  if (role === "admin") {
+    return { role, hasOrganisationMembership: true, hasClubMembership: true };
+  }
+
+  const [organisationMembership, clubMembership] = await Promise.all([
+    OrganisationMember.findOne({ where: { userId } }),
+    ClubMember.findOne({ where: { userId } }),
+  ]);
+
+  return {
+    role,
+    hasOrganisationMembership: Boolean(organisationMembership),
+    hasClubMembership: Boolean(clubMembership),
+  };
+};
+
+const buildEventResponse = (event: Event) => ({
+  ...event.toJSON(),
+  capacity: event.maxCapacity,
+  startAt: event.startAt ?? event.date,
+  endAt: event.endAt ?? event.date,
+  visibility: event.visibility ?? "public",
+  ownerScope: event.ownerScope ?? "public",
+  coverImage: event.coverImage ?? null,
+});
+
+const parseCreateEventPayload = async (req: Request, body: CreateEventBody) => {
+  const context = await getEventFormContext(req.user!.id, req.user!.role);
+  const validation = validateEventFormPayload(body, context);
+
+  if (!validation.ok) {
+    return { error: validation.errors };
+  }
+
+  return { values: validation.values };
+};
 
 // POST /api/events — organiser only, creates a draft
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, description, location, date, maxCapacity, organisationId } = req.body as CreateEventBody;
-
-    if (!title || !date) {
-      res.status(400).json({ message: "title and date are required." });
+    const parsedPayload = await parseCreateEventPayload(req, req.body as CreateEventBody);
+    if ("error" in parsedPayload && parsedPayload.error) {
+      res.status(400).json({ message: parsedPayload.error.join("; ") });
       return;
     }
 
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      res.status(400).json({ message: "Invalid date format." });
-      return;
-    }
+    const {
+      title,
+      description,
+      coverImage,
+      startAt,
+      endAt,
+      capacity,
+      visibility,
+      ownerScope,
+    } = parsedPayload.values;
 
-    if (maxCapacity !== undefined && (!Number.isInteger(maxCapacity) || maxCapacity < 1)) {
-      res.status(400).json({ message: "maxCapacity must be a positive integer." });
-      return;
-    }
-
+    const organisationId = (req.body as CreateEventBody).organisationId;
     let organisationIdValue: string | null = null;
-    if (organisationId) {
+    if (ownerScope === "organisation") {
+      if (!organisationId) {
+        res.status(400).json({ message: "organisationId is required for organisation-scoped events." });
+        return;
+      }
+
       const organisation = await Organisation.findByPk(organisationId);
       if (!organisation) {
         res.status(404).json({ message: "Organisation not found." });
@@ -70,18 +119,33 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
 
     const event = await Event.create({
       title,
-      description: description ?? null,
-      location: location ?? null,
-      date: parsedDate,
+      description,
+      location: (req.body as CreateEventBody).location ?? null,
+      date: startAt,
+      startAt,
+      endAt,
+      coverImage,
+      visibility,
+      ownerScope,
       status: "draft",
-      maxCapacity: maxCapacity ?? null,
+      maxCapacity: capacity ?? null,
       organiserId: req.user!.id,
       organisationId: organisationIdValue,
     });
 
-    res.status(201).json(event);
+    res.status(201).json(buildEventResponse(event));
   } catch (error) {
     console.error("Create Event Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const getEventFormOptions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const context = await getEventFormContext(req.user!.id, req.user!.role);
+    res.json(getAllowedEventFormOptions(context));
+  } catch (error) {
+    console.error("Get Event Form Options Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -165,7 +229,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
     }
 
     const result = visibleEvents.map((e) => ({
-      ...e.toJSON(),
+      ...buildEventResponse(e),
       registrationCount: countMap[e.id] ?? 0,
       isRegistered: userStatusMap[e.id] === "registered",
       isWaitlisted: userStatusMap[e.id] === "waitlisted",
@@ -247,7 +311,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     }
 
     res.json({
-      ...event.toJSON(),
+      ...buildEventResponse(event),
       organiser,
       registrationCount,
       isRegistered,
@@ -283,23 +347,65 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const { title, description, location, date } = req.body as UpdateEventBody;
-
-    if (date !== undefined) {
-      const parsedDate = new Date(date);
-      if (isNaN(parsedDate.getTime())) {
-        res.status(400).json({ message: "Invalid date format." });
-        return;
-      }
-      event.date = parsedDate;
+    const parsedPayload = await parseCreateEventPayload(req, req.body as CreateEventBody);
+    if ("error" in parsedPayload && parsedPayload.error) {
+      res.status(400).json({ message: parsedPayload.error.join("; ") });
+      return;
     }
 
-    if (title !== undefined) event.title = title;
-    if (description !== undefined) event.description = description ?? null;
-    if (location !== undefined) event.location = location ?? null;
+    const {
+      title,
+      description,
+      coverImage,
+      startAt,
+      endAt,
+      capacity,
+      visibility,
+      ownerScope,
+    } = parsedPayload.values;
+
+    const organisationId = (req.body as CreateEventBody).organisationId;
+    if (ownerScope === "organisation") {
+      if (!organisationId) {
+        res.status(400).json({ message: "organisationId is required for organisation-scoped events." });
+        return;
+      }
+
+      const organisation = await Organisation.findByPk(organisationId);
+      if (!organisation) {
+        res.status(404).json({ message: "Organisation not found." });
+        return;
+      }
+      if (organisation.status !== "verified") {
+        res.status(400).json({ message: "Organisation must be verified before creating organisation events." });
+        return;
+      }
+
+      const membership = await OrganisationMember.findOne({
+        where: { organisationId, userId: req.user!.id },
+      });
+      if (!membership) {
+        res.status(403).json({ message: "You must be a member of the organisation to create organisation events." });
+        return;
+      }
+      event.organisationId = organisationId;
+    } else if (req.body && (req.body as CreateEventBody).organisationId === undefined) {
+      event.organisationId = null;
+    }
+
+    event.title = title;
+    event.description = description;
+    event.location = (req.body as CreateEventBody).location ?? null;
+    event.date = startAt;
+    event.startAt = startAt;
+    event.endAt = endAt;
+    event.coverImage = coverImage;
+    event.visibility = visibility;
+    event.ownerScope = ownerScope;
+    event.maxCapacity = capacity ?? null;
 
     await event.save();
-    res.json(event);
+    res.json(buildEventResponse(event));
   } catch (error) {
     console.error("Update Event Error:", error);
     res.status(500).json({ message: "Internal server error." });

@@ -3,6 +3,7 @@ import {
   createEvent,
   listEvents,
   getEvent,
+  getEventFormOptions,
   getMyRegistrations,
   updateEvent,
   publishEvent,
@@ -19,6 +20,7 @@ import { verifyToken, requireOrganiser, requireStudent, requireStudentOrAdmin } 
 const router: Router = express.Router();
 
 router.get("/", verifyToken, listEvents);
+router.get("/form-options", verifyToken, getEventFormOptions);
 router.get("/my-registrations", verifyToken, requireStudentOrAdmin, getMyRegistrations);
 router.get("/:id", verifyToken, getEvent);
 router.post("/", verifyToken, requireOrganiser, createEvent);
