@@ -10,7 +10,7 @@ interface UserAttributes {
     lastName: string | null;
     username: string;
     email: string;
-    password: string;
+    password: string | null;
     authString: string | null;
     ip_encrypted: string | null;
     color: string | null;
@@ -22,7 +22,7 @@ interface UserAttributes {
     createdAt?: Date;
     updatedAt?: Date;
 }
-interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "verificationCode" | "verificationCodeExpires" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {
+interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "password" | "authString" | "ip_encrypted" | "color" | "verificationCode" | "verificationCodeExpires" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {
 }
 declare class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
     id: string;
@@ -31,7 +31,7 @@ declare class User extends Model<UserAttributes, UserCreationAttributes> impleme
     lastName: string | null;
     username: string;
     email: string;
-    password: string;
+    password: string | null;
     authString: string | null;
     ip_encrypted: string | null;
     color: string | null;

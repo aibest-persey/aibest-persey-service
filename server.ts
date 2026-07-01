@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dns from "node:dns";
 import authRoutes from "./src/routes/auth-routes.js";
+import oauthRoutes from "./src/routes/oauth-routes.js";
 import eventRoutes from "./src/routes/event-routes.js";
 import adminRoutes from "./src/routes/admin-routes.js";
 import organiserRoutes from "./src/routes/organiser-routes.js";
@@ -32,6 +33,7 @@ const PORT: number = parseInt(process.env.PORT || "3000", 10);
 server.use(express.json());
 
 server.use("/api/auth", authRoutes);
+server.use("/api/auth/oauth", oauthRoutes);
 server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
 server.use("/api/organisers", organiserRoutes);

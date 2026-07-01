@@ -49,7 +49,7 @@ User.init({
     },
     password: {
         type: DataTypes.STRING(255),
-        allowNull: false,
+        allowNull: true,
     },
     authString: {
         type: DataTypes.STRING(255),

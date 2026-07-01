@@ -149,6 +149,10 @@ export const login = async (req, res) => {
             res.status(403).json({ message: "Please verify your email before logging in." });
             return;
         }
+        if (!user.password) {
+            res.status(400).json({ message: "This account signs in with a social provider. Please continue with Google." });
+            return;
+        }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             res.status(400).json({ message: "Invalid credentials." });

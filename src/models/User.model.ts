@@ -12,7 +12,7 @@ interface UserAttributes {
   lastName: string | null;
   username: string;
   email: string;
-  password: string;
+  password: string | null;
   authString: string | null;
   ip_encrypted: string | null;
   color: string | null;
@@ -25,7 +25,7 @@ interface UserAttributes {
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "authString" | "ip_encrypted" | "color" | "verificationCode" | "verificationCodeExpires" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {}
+interface UserCreationAttributes extends Optional<UserAttributes, "id" | "role" | "password" | "authString" | "ip_encrypted" | "color" | "verificationCode" | "verificationCodeExpires" | "resetPasswordToken" | "resetPasswordExpires" | "bio" | "organization" | "website" | "logoUrl"> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -34,7 +34,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare lastName: string | null;
   declare username: string;
   declare email: string;
-  declare password: string;
+  declare password: string | null;
   declare authString: string | null;
   declare ip_encrypted: string | null;
   declare color: string | null;
@@ -99,7 +99,7 @@ User.init(
     },
     password: {
       type: DataTypes.STRING(255),
-      allowNull: false,
+      allowNull: true,
     },
     authString: {
       type: DataTypes.STRING(255),
