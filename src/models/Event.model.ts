@@ -5,6 +5,7 @@ interface EventAttributes {
   id: string;
   title: string;
   description: string | null;
+  agenda: string | null;
   location: string | null;
   date: Date;
   status: "draft" | "published" | "cancelled";
@@ -15,12 +16,13 @@ interface EventAttributes {
   updatedAt?: Date;
 }
 
-interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "location" | "status" | "maxCapacity" | "organisationId"> {}
+interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId"> {}
 
 class Event extends Model<EventAttributes, EventCreationAttributes> implements EventAttributes {
   declare id: string;
   declare title: string;
   declare description: string | null;
+  declare agenda: string | null;
   declare location: string | null;
   declare date: Date;
   declare status: "draft" | "published" | "cancelled";
@@ -43,6 +45,10 @@ Event.init(
       allowNull: false,
     },
     description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    agenda: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
@@ -71,7 +77,6 @@ Event.init(
     organisationId: {
       type: DataTypes.UUID,
       allowNull: true,
-      defaultValue: null,
     },
   },
   {

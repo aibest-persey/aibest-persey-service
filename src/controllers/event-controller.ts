@@ -12,6 +12,7 @@ import eventBus from "../events/event-bus.js";
 interface CreateEventBody {
   title: string;
   description?: string;
+  agenda?: string;
   location?: string;
   date: string;
   maxCapacity?: number;
@@ -21,6 +22,7 @@ interface CreateEventBody {
 interface UpdateEventBody {
   title?: string;
   description?: string;
+  agenda?: string;
   location?: string;
   date?: string;
 }
@@ -28,7 +30,7 @@ interface UpdateEventBody {
 // POST /api/events — organiser only, creates a draft
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, description, location, date, maxCapacity, organisationId } = req.body as CreateEventBody;
+    const { title, description, agenda, location, date, maxCapacity, organisationId } = req.body as CreateEventBody;
 
     if (!title || !date) {
       res.status(400).json({ message: "title and date are required." });
@@ -71,6 +73,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
     const event = await Event.create({
       title,
       description: description ?? null,
+      agenda: agenda ?? null,
       location: location ?? null,
       date: parsedDate,
       status: "draft",
@@ -283,7 +286,7 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const { title, description, location, date } = req.body as UpdateEventBody;
+    const { title, description, agenda, location, date } = req.body as UpdateEventBody;
 
     if (date !== undefined) {
       const parsedDate = new Date(date);
@@ -296,6 +299,7 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
 
     if (title !== undefined) event.title = title;
     if (description !== undefined) event.description = description ?? null;
+    if (agenda !== undefined) event.agenda = agenda ?? null;
     if (location !== undefined) event.location = location ?? null;
 
     await event.save();
