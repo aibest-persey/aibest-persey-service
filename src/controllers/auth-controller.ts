@@ -6,7 +6,7 @@ import requestIp from "request-ip";
 import crypto from "crypto";
 import User from "../models/User.model.js";
 import redis from "../clients/redis-client.js";
-import { sendVerificationEmail, sendResetPasswordEmail } from "../modules/email-service.js";
+import { sendResetPasswordEmail } from "../modules/email-service.js";
 
 interface RegisterBody {
   firstName?: string;
@@ -70,10 +70,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       "#3f51b5",
     ];
 
-    const verificationCode = crypto.randomInt(100000, 999999).toString();
-    const verificationHash = crypto.createHash("sha256").update(verificationCode).digest("hex");
-    const verificationExpires = Date.now() + 15 * 60 * 1000;
-
     const newUser = await User.create({
       role: "student",
       firstName: firstName || null,
@@ -82,18 +78,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       email,
       password: hashedPassword,
       authString,
-      emailVerified: false,
-      verificationCode: verificationHash,
-      verificationCodeExpires: verificationExpires,
+      emailVerified: true,
       ip_encrypted: await bcrypt.hash(requestIp.getClientIp(req) || "unknown", 10),
       color: colorsArr[Math.floor(Math.random() * colorsArr.length)],
     });
-
-    try {
-      await sendVerificationEmail({ email, code: verificationCode });
-    } catch (err) {
-      console.warn("Verification email failed to send:", err);
-    }
 
     try {
       const publicUser = {
@@ -115,7 +103,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       console.warn("Failed to set user cache on register", e);
     }
 
-    res.status(201).json({ message: "User registered successfully. Check your email for a verification code." });
+    res.status(201).json({ message: "User registered successfully." });
   } catch (error) {
     console.error("Registration Error:", error);
     res.status(500).json({ message: "Internal server error." });
