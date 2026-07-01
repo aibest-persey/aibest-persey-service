@@ -8,6 +8,11 @@ interface EventAttributes {
   agenda: string | null;
   location: string | null;
   date: Date;
+  startAt: Date | null;
+  endAt: Date | null;
+  coverImage: string | null;
+  visibility: "public" | "org-only" | "club";
+  ownerScope: "public" | "organisation" | "club";
   status: "draft" | "published" | "cancelled";
   maxCapacity: number | null;
   organiserId: string;
@@ -16,7 +21,7 @@ interface EventAttributes {
   updatedAt?: Date;
 }
 
-interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId"> {}
+interface EventCreationAttributes extends Optional<EventAttributes, "id" | "description" | "agenda" | "location" | "status" | "maxCapacity" | "organisationId" | "startAt" | "endAt" | "coverImage" | "visibility" | "ownerScope"> {}
 
 class Event extends Model<EventAttributes, EventCreationAttributes> implements EventAttributes {
   declare id: string;
@@ -25,6 +30,11 @@ class Event extends Model<EventAttributes, EventCreationAttributes> implements E
   declare agenda: string | null;
   declare location: string | null;
   declare date: Date;
+  declare startAt: Date | null;
+  declare endAt: Date | null;
+  declare coverImage: string | null;
+  declare visibility: "public" | "org-only" | "club";
+  declare ownerScope: "public" | "organisation" | "club";
   declare status: "draft" | "published" | "cancelled";
   declare maxCapacity: number | null;
   declare organiserId: string;
@@ -59,6 +69,31 @@ Event.init(
     date: {
       type: DataTypes.DATE,
       allowNull: false,
+    },
+    startAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    endAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    coverImage: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      defaultValue: null,
+    },
+    visibility: {
+      type: DataTypes.ENUM("public", "org-only", "club"),
+      allowNull: false,
+      defaultValue: "public",
+    },
+    ownerScope: {
+      type: DataTypes.ENUM("public", "organisation", "club"),
+      allowNull: false,
+      defaultValue: "public",
     },
     status: {
       type: DataTypes.ENUM("draft", "published", "cancelled"),

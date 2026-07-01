@@ -1,24 +1,7 @@
-import express, { Router } from "express";
-import {
-  createEvent,
-  listEvents,
-  getEvent,
-  getEventFormOptions,
-  getMyRegistrations,
-  updateEvent,
-  publishEvent,
-  unpublishEvent,
-  cancelEvent,
-  deleteEvent,
-  registerForEvent,
-  cancelRegistration,
-  getTicket,
-  getParticipants,
-} from "../controllers/event-controller.js";
+import express from "express";
+import { createEvent, listEvents, getEvent, getEventFormOptions, getMyRegistrations, updateEvent, publishEvent, unpublishEvent, cancelEvent, deleteEvent, registerForEvent, cancelRegistration, getTicket, getParticipants, } from "../controllers/event-controller.js";
 import { verifyToken, requireOrganiser, requireStudent, requireStudentOrAdmin } from "../middleware/auth-middleware.js";
-
-const router: Router = express.Router();
-
+const router = express.Router();
 router.get("/", verifyToken, listEvents);
 router.get("/form-options", verifyToken, getEventFormOptions);
 router.get("/my-registrations", verifyToken, requireStudentOrAdmin, getMyRegistrations);
@@ -33,5 +16,5 @@ router.post("/:id/register", verifyToken, requireStudent, registerForEvent);
 router.delete("/:id/register", verifyToken, requireStudent, cancelRegistration);
 router.get("/:id/ticket", verifyToken, requireStudent, getTicket);
 router.get("/:id/participants", verifyToken, requireOrganiser, getParticipants);
-
 export default router;
+//# sourceMappingURL=event-routes.js.map

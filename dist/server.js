@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { Express } from "express";
+import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dns from "node:dns";
@@ -20,17 +20,12 @@ import "./src/models/Message.model.js";
 import "./src/models/RoleChangeRequest.model.js";
 import "./src/workers/notification-worker.js";
 import { startProcessor } from "./src/workers/notification-processor.js";
-
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
-
-const __filename: string = fileURLToPath(import.meta.url);
-const __dirname: string = path.dirname(__filename);
-
-const server: Express = express();
-const PORT: number = parseInt(process.env.PORT || "3000", 10);
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const server = express();
+const PORT = parseInt(process.env.PORT || "3000", 10);
 server.use(express.json());
-
 server.use("/api/auth", authRoutes);
 server.use("/api/events", eventRoutes);
 server.use("/api/admin", adminRoutes);
@@ -41,15 +36,12 @@ server.use("/api/news", newsRoutes);
 server.use("/api/messages", messageRoutes);
 server.use("/api/role-requests", roleChangeRoutes);
 server.use("/api/schedule", scheduleRoutes);
-
 server.get("/schedule", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "schedule.html"));
+    res.sendFile(path.join(__dirname, "public", "schedule.html"));
 });
-
 server.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));
+    res.sendFile(path.join(__dirname, "aibest-persey-client", "index.html"));
 });
-
 // Add 'admin' to the role ENUM before sync (Postgres won't add it via alter:true alone)
 sequelize.query(`
   DO $$ BEGIN
@@ -62,16 +54,16 @@ sequelize.query(`
     END IF;
   END $$;
 `).catch(() => {
-  // ENUM type doesn't exist yet on first run — sync will create it with all values
+    // ENUM type doesn't exist yet on first run — sync will create it with all values
 });
-
 sequelize
-  .sync({ alter: true })
-  .then(() => {
+    .sync({ alter: true })
+    .then(() => {
     console.log("PostgreSQL tables synced");
     startProcessor();
     server.listen(PORT, () => {
-      console.log("Server running on http://localhost:" + PORT);
+        console.log("Server running on http://localhost:" + PORT);
     });
-  })
-  .catch((err: Error) => console.error("PostgreSQL sync error:", err));
+})
+    .catch((err) => console.error("PostgreSQL sync error:", err));
+//# sourceMappingURL=server.js.map

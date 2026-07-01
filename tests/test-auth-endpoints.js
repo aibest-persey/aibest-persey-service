@@ -147,7 +147,7 @@ async function runTests() {
   assert(r10.status === 403, `student create → 403 (got ${r10.status})`);
 
   console.log("11. Create event as organiser (draft)");
-  const r11 = await request("POST", EVENTS_URL, { title: "Tech Conference", description: "Annual tech event", location: "Sofia", date: "2026-09-15T09:00:00Z" }, organiserToken);
+  const r11 = await request("POST", EVENTS_URL, { title: "Tech Conference", description: "Annual tech event", location: "Sofia", start: "2026-09-15T09:00:00Z", end: "2026-09-15T11:00:00Z" }, organiserToken);
   assert(r11.status === 201, `create event → 201 (got ${r11.status})`);
   assert(r11.data.status === "draft", `status is draft (got ${r11.data.status})`);
   eventId = r11.data.id;
@@ -182,7 +182,7 @@ async function runTests() {
   assert(!r15.data.organiser.password, "organiser password not exposed");
 
   console.log("16. Update draft event");
-  const r16 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Tech Conference 2026", location: "Plovdiv" }, organiserToken);
+  const r16 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Tech Conference 2026", location: "Plovdiv", start: "2026-09-15T09:00:00Z", end: "2026-09-15T11:00:00Z" }, organiserToken);
   assert(r16.status === 200, `update → 200 (got ${r16.status})`);
   assert(r16.data.title === "Tech Conference 2026", `title updated (got ${r16.data.title})`);
   assert(r16.data.location === "Plovdiv", `location updated (got ${r16.data.location})`);
@@ -268,7 +268,7 @@ async function runTests() {
   assert(rw3.status === 404, `double cancel → 404 (got ${rw3.status})`);
 
   console.log("W4. Create capacity-limited event (maxCapacity=1)");
-  const rw4 = await request("POST", EVENTS_URL, { title: "Capacity Event", date: "2026-10-01T10:00:00Z", maxCapacity: 1 }, organiserToken);
+  const rw4 = await request("POST", EVENTS_URL, { title: "Capacity Event", start: "2026-10-01T10:00:00Z", end: "2026-10-01T12:00:00Z", capacity: 1 }, organiserToken);
   assert(rw4.status === 201, `create capacity event → 201 (got ${rw4.status})`);
   assert(rw4.data.maxCapacity === 1, `maxCapacity is 1 (got ${rw4.data.maxCapacity})`);
   capacityEventId = rw4.data.id;
@@ -318,7 +318,7 @@ async function runTests() {
   assert(r29.data.status === "draft", `status back to draft (got ${r29.data.status})`);
 
   console.log("30. Update after unpublish works");
-  const r30 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Final Title" }, organiserToken);
+  const r30 = await request("PUT", EVENTS_URL + "/" + eventId, { title: "Final Title", start: "2026-09-20T09:00:00Z", end: "2026-09-20T11:00:00Z" }, organiserToken);
   assert(r30.status === 200, `update after unpublish → 200 (got ${r30.status})`);
 
   console.log("31. ?status=draft filter — organiser sees only drafts");
