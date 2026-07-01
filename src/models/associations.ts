@@ -8,6 +8,7 @@ import OrganisationMember from "./OrganisationMember.model.js";
 import Club from "./Club.model.js";
 import ClubMember from "./ClubMember.model.js";
 import News from "./News.model.js";
+import OrganisationJoinRequest from "./OrganisationJoinRequest.model.js";
 
 Registration.belongsTo(User, { foreignKey: "studentId", as: "student" });
 Registration.belongsTo(Event, { foreignKey: "eventId", as: "event" });
@@ -49,3 +50,9 @@ News.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" 
 Organisation.hasMany(News, { foreignKey: "organisationId", as: "news" });
 News.belongsTo(Club, { foreignKey: "clubId", as: "club" });
 Club.hasMany(News, { foreignKey: "clubId", as: "news" });
+
+OrganisationJoinRequest.belongsTo(User, { foreignKey: "studentId", as: "student" });
+OrganisationJoinRequest.belongsTo(User, { foreignKey: "reviewedBy", as: "reviewer" });
+OrganisationJoinRequest.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation" });
+Organisation.hasMany(OrganisationJoinRequest, { foreignKey: "organisationId", as: "joinRequests" });
+User.hasMany(OrganisationJoinRequest, { foreignKey: "studentId", as: "organisationJoinRequests" });

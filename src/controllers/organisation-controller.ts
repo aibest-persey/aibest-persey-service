@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import User from "../models/User.model.js";
 import Organisation from "../models/Organisation.model.js";
 import OrganisationMember from "../models/OrganisationMember.model.js";
+import OrganisationJoinRequest from "../models/OrganisationJoinRequest.model.js";
 
 interface CreateOrganisationBody {
   name: string;
@@ -72,29 +73,29 @@ export const createOrganisation = async (req: Request, res: Response): Promise<v
 
 export const listOrganisations = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (req.user!.role === "admin") {
-      const organisations = await Organisation.findAll({ order: [["createdAt", "DESC"]] });
-      res.json(organisations);
-      return;
-    }
-
     const memberships = await OrganisationMember.findAll({
       where: { userId: req.user!.id },
       attributes: ["organisationId"],
     });
-    const membershipIds = memberships.map((m) => m.organisationId);
+    const membershipIds = new Set(memberships.map((m) => m.organisationId));
+
+    if (req.user!.role === "admin") {
+      const organisations = await Organisation.findAll({ order: [["createdAt", "DESC"]] });
+      res.json(organisations.map((o) => ({ ...o.toJSON(), isMember: membershipIds.has(o.id) })));
+      return;
+    }
 
     const organisations = await Organisation.findAll({
       where: {
         [Op.or]: [
           { status: "verified" },
-          { id: { [Op.in]: membershipIds } },
+          { id: { [Op.in]: Array.from(membershipIds) } },
         ],
       },
       order: [["createdAt", "DESC"]],
     });
 
-    res.json(organisations);
+    res.json(organisations.map((o) => ({ ...o.toJSON(), isMember: membershipIds.has(o.id) })));
   } catch (error) {
     console.error("List Organisations Error:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -287,6 +288,170 @@ export const removeOrganisationMember = async (req: Request, res: Response): Pro
     res.json({ message: "Member removed." });
   } catch (error) {
     console.error("Remove Organisation Member Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// POST /api/organisations/:id/join-requests — any authenticated user requests to join
+export const requestToJoinOrganisation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation || organisation.status !== "verified") {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+
+    const existingMembership = await getMembership(id, req.user!.id);
+    if (existingMembership) {
+      res.status(400).json({ message: "You are already a member of this organisation." });
+      return;
+    }
+
+    const existingRequest = await OrganisationJoinRequest.findOne({
+      where: { organisationId: id, studentId: req.user!.id, status: "pending" },
+    });
+    if (existingRequest) {
+      res.status(409).json({ message: "You already have a pending request to join this organisation." });
+      return;
+    }
+
+    const request = await OrganisationJoinRequest.create({
+      organisationId: id,
+      studentId: req.user!.id,
+    });
+
+    res.status(201).json(request);
+  } catch (error) {
+    console.error("Request To Join Organisation Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// GET /api/organisations/:id/join-requests — owner/manager only
+export const listJoinRequestsForOrg = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation) {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+
+    const membership = await getMembership(id, req.user!.id);
+    if (!canManageOrganisation(membership) && req.user!.role !== "admin") {
+      res.status(403).json({ message: "Only organisation owners or managers can view join requests." });
+      return;
+    }
+
+    const requests = await OrganisationJoinRequest.findAll({
+      where: { organisationId: id, status: "pending" },
+      order: [["createdAt", "ASC"]],
+      include: [{ model: User, as: "student", attributes: ["id", "username", "email", "firstName", "lastName", "color"] }],
+    });
+
+    res.json(requests);
+  } catch (error) {
+    console.error("List Join Requests Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// GET /api/organisations/join-requests/my — the caller's own requests, across all orgs
+export const getMyJoinRequests = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const requests = await OrganisationJoinRequest.findAll({
+      where: { studentId: req.user!.id },
+      order: [["createdAt", "DESC"]],
+    });
+    res.json(requests);
+  } catch (error) {
+    console.error("Get My Join Requests Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// PATCH /api/organisations/:id/join-requests/:reqId/approve — owner/manager only
+export const approveJoinRequest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id, reqId } = req.params as { id: string; reqId: string };
+
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation) {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+
+    const membership = await getMembership(id, req.user!.id);
+    if (!canManageOrganisation(membership) && req.user!.role !== "admin") {
+      res.status(403).json({ message: "Only organisation owners or managers can approve join requests." });
+      return;
+    }
+
+    const request = await OrganisationJoinRequest.findByPk(reqId);
+    if (!request || request.organisationId !== id) {
+      res.status(404).json({ message: "Join request not found." });
+      return;
+    }
+    if (request.status !== "pending") {
+      res.status(400).json({ message: "Request is already resolved." });
+      return;
+    }
+
+    const existingMembership = await getMembership(id, request.studentId);
+    if (!existingMembership) {
+      await OrganisationMember.create({ organisationId: id, userId: request.studentId, role: "member" });
+    }
+
+    request.status = "approved";
+    request.reviewedBy = req.user!.id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    res.json({ message: "Join request approved.", request });
+  } catch (error) {
+    console.error("Approve Join Request Error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// PATCH /api/organisations/:id/join-requests/:reqId/reject — owner/manager only
+export const rejectJoinRequest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id, reqId } = req.params as { id: string; reqId: string };
+
+    const organisation = await Organisation.findByPk(id);
+    if (!organisation) {
+      res.status(404).json({ message: "Organisation not found." });
+      return;
+    }
+
+    const membership = await getMembership(id, req.user!.id);
+    if (!canManageOrganisation(membership) && req.user!.role !== "admin") {
+      res.status(403).json({ message: "Only organisation owners or managers can reject join requests." });
+      return;
+    }
+
+    const request = await OrganisationJoinRequest.findByPk(reqId);
+    if (!request || request.organisationId !== id) {
+      res.status(404).json({ message: "Join request not found." });
+      return;
+    }
+    if (request.status !== "pending") {
+      res.status(400).json({ message: "Request is already resolved." });
+      return;
+    }
+
+    request.status = "rejected";
+    request.reviewedBy = req.user!.id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    res.json({ message: "Join request rejected.", request });
+  } catch (error) {
+    console.error("Reject Join Request Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
