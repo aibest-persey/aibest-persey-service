@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
 import { Op } from "sequelize";
+import crypto from "crypto";
 import Event from "../models/Event.model.js";
 import Registration from "../models/Registration.model.js";
 import User from "../models/User.model.js";
+import Organisation from "../models/Organisation.model.js";
+import OrganisationMember from "../models/OrganisationMember.model.js";
 import sequelize from "../clients/postgres-client.js";
 import eventBus from "../events/event-bus.js";
 
@@ -12,6 +15,7 @@ interface CreateEventBody {
   location?: string;
   date: string;
   maxCapacity?: number;
+  organisationId?: string;
 }
 
 interface UpdateEventBody {
@@ -24,7 +28,7 @@ interface UpdateEventBody {
 // POST /api/events — organiser only, creates a draft
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, description, location, date, maxCapacity } = req.body as CreateEventBody;
+    const { title, description, location, date, maxCapacity, organisationId } = req.body as CreateEventBody;
 
     if (!title || !date) {
       res.status(400).json({ message: "title and date are required." });
@@ -42,6 +46,28 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    let organisationIdValue: string | null = null;
+    if (organisationId) {
+      const organisation = await Organisation.findByPk(organisationId);
+      if (!organisation) {
+        res.status(404).json({ message: "Organisation not found." });
+        return;
+      }
+      if (organisation.status !== "verified") {
+        res.status(400).json({ message: "Organisation must be verified before creating organisation events." });
+        return;
+      }
+
+      const membership = await OrganisationMember.findOne({
+        where: { organisationId, userId: req.user!.id },
+      });
+      if (!membership) {
+        res.status(403).json({ message: "You must be a member of the organisation to create organisation events." });
+        return;
+      }
+      organisationIdValue = organisationId;
+    }
+
     const event = await Event.create({
       title,
       description: description ?? null,
@@ -50,6 +76,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
       status: "draft",
       maxCapacity: maxCapacity ?? null,
       organiserId: req.user!.id,
+      organisationId: organisationIdValue,
     });
 
     res.status(201).json(event);
@@ -59,18 +86,30 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// GET /api/events — students see published + cancelled; organisers see their own (all) + others' published/cancelled
+/**
+ * 🎯 TICKET #37: Events feed & detail (read APIs + wiring)
+ * GET /api/events — list events based on user roles and filters
+ */
 export const listEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const isAdmin = req.user!.role === "admin";
     const userId = req.user!.id;
     const { upcoming, status } = req.query as { upcoming?: string; status?: string };
 
     const visibleStatuses = { [Op.in]: ["published", "cancelled"] as const };
 
+    /**
+     * 🎯 TICKET #30: Backend permission enforcement
+     * Base visibility restriction based on user permissions
+     */
     let where: any = isOrganiser
       ? { [Op.or]: [{ organiserId: userId }, { status: visibleStatuses }] }
       : { status: visibleStatuses };
+
+    if (isAdmin) {
+      where = {};
+    }
 
     if (status === "draft" && isOrganiser) {
       where = { organiserId: userId, status: "draft" };
@@ -86,12 +125,27 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
 
     const events = await Event.findAll({ where, order: [["date", "ASC"]] });
 
-    if (events.length === 0) {
+    const orgIds = Array.from(new Set(
+      events.map((e) => e.organisationId).filter((o): o is string => Boolean(o)),
+    ));
+    const orgMemberships = orgIds.length > 0
+      ? await OrganisationMember.findAll({ where: { userId, organisationId: { [Op.in]: orgIds } } })
+      : [];
+    const memberOrgIds = new Set(orgMemberships.map((m) => m.organisationId));
+
+    const visibleEvents = events.filter((event) => {
+      if (!event.organisationId) return true;
+      if (isAdmin) return true;
+      if (event.organiserId === userId) return true;
+      return memberOrgIds.has(event.organisationId);
+    });
+
+    if (visibleEvents.length === 0) {
       res.json([]);
       return;
     }
 
-    const eventIds = events.map(e => e.id);
+    const eventIds = visibleEvents.map((e) => e.id);
     const registrations = await Registration.findAll({
       where: {
         eventId: { [Op.in]: eventIds },
@@ -110,7 +164,7 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
       }
     }
 
-    const result = events.map(e => ({
+    const result = visibleEvents.map((e) => ({
       ...e.toJSON(),
       registrationCount: countMap[e.id] ?? 0,
       isRegistered: userStatusMap[e.id] === "registered",
@@ -124,11 +178,14 @@ export const listEvents = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ message: "Internal server error." });
   }
 };
-
-// GET /api/events/:id — full event detail
+/**
+ * 🎯 TICKET #40: News feed & detail wiring
+ * GET /api/events/:id — full event detail
+ */
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const isOrganiser = req.user!.role === "organiser";
+    const isAdmin = req.user!.role === "admin";
     const userId = req.user!.id;
     const { id } = req.params as { id: string };
 
@@ -139,12 +196,20 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!isOrganiser && event.status === "draft") {
+    const orgMembership = event.organisationId
+      ? await OrganisationMember.findOne({ where: { organisationId: event.organisationId, userId } })
+      : null;
+
+    const isOwner = event.organiserId === userId;
+    if (event.organisationId && !isOwner && !isAdmin && !orgMembership) {
       res.status(404).json({ message: "Event not found." });
       return;
     }
 
-    const isOwner = event.organiserId === userId;
+    if (!isOrganiser && event.status === "draft") {
+      res.status(404).json({ message: "Event not found." });
+      return;
+    }
 
     const organiser = await User.findByPk(event.organiserId, {
       attributes: ["id", "username", "firstName", "lastName", "color"],
@@ -369,8 +434,10 @@ export const deleteEvent = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ message: "Internal server error." });
   }
 };
-
-// POST /api/events/:id/register — student only
+/**
+ * 🎯 TICKET #32: EPIC C — Core Domain Logic
+ * POST /api/events/:id/register — student only, handles isolated row locks to safely prevent over-booking
+ */
 export const registerForEvent = async (req: Request, res: Response): Promise<void> => {
   const eventId = (req.params as { id: string }).id;
   const studentId = req.user!.id;
@@ -421,7 +488,8 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
         }
       }
 
-      return Registration.create({ eventId, studentId, status, waitlistPosition }, { transaction: t });
+      const ticketCode = status === "registered" ? crypto.randomBytes(16).toString("hex") : null;
+      return Registration.create({ eventId, studentId, status, waitlistPosition, ticketCode }, { transaction: t });
     });
 
     res.status(201).json(registration);
@@ -458,6 +526,7 @@ export const registerForEvent = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ message: "Internal server error." });
   }
 };
+
 // DELETE /api/events/:id/register — student cancels their own registration
 export const cancelRegistration = async (req: Request, res: Response): Promise<void> => {
   const eventId = (req.params as { id: string }).id;
@@ -480,8 +549,11 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
       if (!registration) throw Object.assign(new Error("not_found"), { code: 404 });
 
       const wasRegistered = registration.status === "registered";
+      const oldPosition = registration.waitlistPosition;
+
       registration.status = "cancelled";
       registration.waitlistPosition = null;
+      registration.ticketCode = null;
       await registration.save({ transaction: t });
 
       cancelledRegistrationId = registration.id;
@@ -496,9 +568,31 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
         if (next) {
           next.status = "registered";
           next.waitlistPosition = null;
+          next.ticketCode = crypto.randomBytes(16).toString("hex");
           await next.save({ transaction: t });
           promotedStudentId = next.studentId;
           promotedRegistrationId = next.id;
+
+          const remainingWaitlist = await Registration.findAll({
+            where: { eventId, status: "waitlisted" },
+            order: [["waitlistPosition", "ASC"]],
+            transaction: t,
+          });
+          let currentPos = 1;
+          for (const rw of remainingWaitlist) {
+            rw.waitlistPosition = currentPos++;
+            await rw.save({ transaction: t });
+          }
+        }
+      } else if (!wasRegistered && oldPosition !== null) {
+        const trailingWaitlist = await Registration.findAll({
+          where: { eventId, status: "waitlisted", waitlistPosition: { [Op.gt]: oldPosition } },
+          order: [["waitlistPosition", "ASC"]],
+          transaction: t,
+        });
+        for (const tw of trailingWaitlist) {
+          tw.waitlistPosition = tw.waitlistPosition! - 1;
+          await tw.save({ transaction: t });
         }
       }
     });
@@ -507,16 +601,12 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
 
     const [cancellingStudent, promotedStudent] = await Promise.all([
       User.findByPk(studentId, { attributes: ["id", "email", "firstName", "lastName"] }),
-      promotedStudentId
-        ? User.findByPk(promotedStudentId, { attributes: ["id", "email", "firstName", "lastName"] })
-        : Promise.resolve(null),
+      promotedStudentId ? User.findByPk(promotedStudentId, { attributes: ["id", "email", "firstName", "lastName"] }) : Promise.resolve(null),
     ]);
 
     if (cancellingStudent) {
       eventBus.publish("registration.cancelled", {
-        eventId,
-        eventTitle,
-        studentId,
+        eventId, eventTitle, studentId,
         studentEmail: cancellingStudent.get("email") as string,
         studentName: `${cancellingStudent.get("firstName")} ${cancellingStudent.get("lastName")}`,
         registrationId: cancelledRegistrationId,
@@ -525,40 +615,26 @@ export const cancelRegistration = async (req: Request, res: Response): Promise<v
 
     if (promotedStudentId && promotedRegistrationId && promotedStudent) {
       eventBus.publish("registration.promoted", {
-        eventId,
-        eventTitle: event.title,
-        studentId: promotedStudentId,
+        eventId, eventTitle, studentId: promotedStudentId,
         studentEmail: promotedStudent.get("email") as string,
         studentName: `${promotedStudent.get("firstName")} ${promotedStudent.get("lastName")}`,
         registrationId: promotedRegistrationId,
       });
     }
   } catch (error: any) {
-    if (error.code === 404) {
-      res.status(404).json({ message: "Registration not found." });
-      return;
-    }
+    if (error.code === 404) { res.status(404).json({ message: "Registration not found." }); return; }
     console.error("Cancel Registration Error:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };
 
-// GET /api/events/my-registrations — student only, their own active registrations with event details
+// GET /api/events/my-registrations — student only, active feed dashboard views
 export const getMyRegistrations = async (req: Request, res: Response): Promise<void> => {
   try {
     const registrations = await Registration.findAll({
-      where: {
-        studentId: req.user!.id,
-        status: { [Op.in]: ["registered", "waitlisted"] },
-      },
+      where: { studentId: req.user!.id, status: { [Op.in]: ["registered", "waitlisted"] } },
       order: [["createdAt", "DESC"]],
-      include: [
-        {
-          model: Event,
-          as: "event",
-          attributes: ["id", "title", "location", "date", "status", "maxCapacity"],
-        },
-      ],
+      include: [{ model: Event, as: "event", attributes: ["id", "title", "location", "date", "status", "maxCapacity"] }],
     });
     res.json(registrations);
   } catch (error) {
@@ -584,10 +660,7 @@ export const getParticipants = async (req: Request, res: Response): Promise<void
     }
 
     const registrations = await Registration.findAll({
-      where: {
-        eventId,
-        status: { [Op.in]: ["registered", "waitlisted"] },
-      },
+      where: { eventId, status: { [Op.in]: ["registered", "waitlisted"] } },
       order: [["createdAt", "ASC"]],
       include: [
         {
