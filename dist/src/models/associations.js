@@ -11,6 +11,7 @@ import News from "./News.model.js";
 import OrganisationJoinRequest from "./OrganisationJoinRequest.model.js";
 import OAuthAccount from "./OAuthAccount.model.js";
 import Post from "./Post.model.js";
+import Notification from "./Notification.model.js";
 Registration.belongsTo(User, { foreignKey: "studentId", as: "student" });
 Registration.belongsTo(Event, { foreignKey: "eventId", as: "event" });
 Event.hasMany(Registration, { foreignKey: "eventId", as: "registrations" });
@@ -56,4 +57,6 @@ Post.belongsTo(Club, { foreignKey: "clubId", as: "club" });
 Club.hasMany(Post, { foreignKey: "clubId", as: "posts" });
 Event.belongsTo(Club, { foreignKey: "clubId", as: "club" });
 Club.hasMany(Event, { foreignKey: "clubId", as: "events" });
+Notification.belongsTo(User, { foreignKey: "userId", as: "recipient" });
+User.hasMany(Notification, { foreignKey: "userId", as: "notifications" });
 //# sourceMappingURL=associations.js.map

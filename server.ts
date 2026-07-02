@@ -14,6 +14,7 @@ import messageRoutes from "./src/routes/message-routes.js";
 import newsRoutes from "./src/routes/news-routes.js";
 import postRoutes from "./src/routes/post-routes.js";
 import roleChangeRoutes from "./src/routes/rolechange-routes.js";
+import notificationRoutes from "./src/routes/notification-routes.js";
 import scheduleRoutes from "./src/routes/schedule-routes.js";
 import sequelize from "./src/clients/postgres-client.js";
 import "./src/models/associations.js";
@@ -44,6 +45,7 @@ server.use("/api/news", newsRoutes);
 server.use("/api/posts", postRoutes);
 server.use("/api/messages", messageRoutes);
 server.use("/api/role-requests", roleChangeRoutes);
+server.use("/api/notifications", notificationRoutes);
 server.use("/api/schedule", scheduleRoutes);
 
 server.get("/schedule", (req, res) => {

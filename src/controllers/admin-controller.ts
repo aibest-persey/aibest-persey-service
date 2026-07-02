@@ -20,13 +20,13 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// PATCH /api/admin/users/:id/role — set a user's role (student | organiser)
+// PATCH /api/admin/users/:id/role — set a user's role (student | organiser | admin)
 export const setUserRole = async (req: Request, res: Response): Promise<void> => {
   try {
     const { role } = req.body as { role: string };
 
-    if (!["student", "organiser"].includes(role)) {
-      res.status(400).json({ message: "Role must be 'student' or 'organiser'." });
+    if (!["student", "organiser", "admin"].includes(role)) {
+      res.status(400).json({ message: "Role must be 'student', 'organiser', or 'admin'." });
       return;
     }
 
@@ -43,12 +43,7 @@ export const setUserRole = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    if (user.role === "admin") {
-      res.status(400).json({ message: "Cannot change the role of another admin." });
-      return;
-    }
-
-    user.role = role as "student" | "organiser";
+    user.role = role as "student" | "organiser" | "admin";
     await user.save();
 
     res.json({

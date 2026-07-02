@@ -18,12 +18,12 @@ export const listUsers = async (req, res) => {
         res.status(500).json({ message: "Internal server error." });
     }
 };
-// PATCH /api/admin/users/:id/role — set a user's role (student | organiser)
+// PATCH /api/admin/users/:id/role — set a user's role (student | organiser | admin)
 export const setUserRole = async (req, res) => {
     try {
         const { role } = req.body;
-        if (!["student", "organiser"].includes(role)) {
-            res.status(400).json({ message: "Role must be 'student' or 'organiser'." });
+        if (!["student", "organiser", "admin"].includes(role)) {
+            res.status(400).json({ message: "Role must be 'student', 'organiser', or 'admin'." });
             return;
         }
         const { id } = req.params;
@@ -34,10 +34,6 @@ export const setUserRole = async (req, res) => {
         const user = await User.findByPk(id);
         if (!user) {
             res.status(404).json({ message: "User not found." });
-            return;
-        }
-        if (user.role === "admin") {
-            res.status(400).json({ message: "Cannot change the role of another admin." });
             return;
         }
         user.role = role;

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import RoleChangeRequest from "../models/RoleChangeRequest.model.js";
 import User from "../models/User.model.js";
+import Notification from "../models/Notification.model.js";
 
 const STUDENT_ATTRS = ["id", "username", "email", "firstName", "lastName", "color"];
 
@@ -22,6 +23,17 @@ export const submitRequest = async (req: Request, res: Response): Promise<void> 
       requestedRole: "organiser",
       reason: reason?.trim() || null,
     });
+
+    const admins = await User.findAll({ where: { role: "admin" }, attributes: ["id"] });
+    if (admins.length > 0) {
+      await Notification.bulkCreate(admins.map((admin) => ({
+        userId: admin.id,
+        type: "role_request_submitted" as const,
+        title: "New organiser request",
+        body: `${req.user!.username} requested to become an organiser.`,
+        relatedId: request.id,
+      })));
+    }
 
     res.status(201).json(request);
   } catch (error) {
@@ -101,6 +113,14 @@ export const approveRequest = async (req: Request, res: Response): Promise<void>
     request.reviewedAt = new Date();
     await request.save();
 
+    await Notification.create({
+      userId: student.id,
+      type: "role_request_approved",
+      title: "Your organiser request was approved",
+      body: `You're now an ${request.requestedRole}. Log out and back in to see your new permissions.`,
+      relatedId: request.id,
+    });
+
     res.json({
       message: `${student.username} is now an ${request.requestedRole}.`,
       request,
@@ -129,6 +149,14 @@ export const rejectRequest = async (req: Request, res: Response): Promise<void> 
     request.reviewedBy = req.user!.id;
     request.reviewedAt = new Date();
     await request.save();
+
+    await Notification.create({
+      userId: request.studentId,
+      type: "role_request_rejected",
+      title: "Your organiser request was rejected",
+      body: "Your request to become an organiser was rejected. You may contact an admin.",
+      relatedId: request.id,
+    });
 
     res.json({ message: "Request rejected.", request });
   } catch (error) {
